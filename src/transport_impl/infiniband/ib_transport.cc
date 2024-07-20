@@ -15,7 +15,7 @@ constexpr size_t IBTransport::kMaxDataPerPkt;
 //  * On physical clusters, gid_index = 0 always works (in my experience)
 //  * On VM clusters (AWS/KVM), gid_index = 0 does not work, gid_index = 1 works
 //  * Mellanox's `show_gids` script lists all GIDs on all NICs
-static constexpr size_t kDefaultGIDIndex = 1;
+static constexpr size_t kDefaultGIDIndex = 3;
 
 // Initialize the protection domain, queue pair, and memory registration and
 // deregistration functions. RECVs will be initialized later when the hugepage
