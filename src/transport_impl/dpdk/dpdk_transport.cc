@@ -44,6 +44,7 @@ DpdkTransport::DpdkTransport(uint16_t sm_udp_port, uint8_t rpc_id,
       // clang-format off
       const char *rte_argv[] = {
           "-c",            "0x0",
+          "-a",            "0000:98:00.0",
           "-n",            "6",  // Memory channels
           "-m",            "1024", // Max memory in megabytes
           "--proc-type",   "auto",
