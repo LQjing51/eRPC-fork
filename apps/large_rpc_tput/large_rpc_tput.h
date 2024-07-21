@@ -19,13 +19,41 @@ void ctrl_c_handler(int) { ctrl_c_pressed = 1; }
 // Flags
 DEFINE_uint64(num_proc_0_threads, 0, "Threads in process 0");
 DEFINE_uint64(num_proc_other_threads, 0, "Threads in process with ID != 0");
-DEFINE_uint64(req_size, 0, "Request data size");
-DEFINE_uint64(resp_size, 0, "Response data size");
+DEFINE_string(req_sizes, "", "Request data size");
+DEFINE_string(resp_sizes, "", "Response data size");
 DEFINE_uint64(concurrency, 0, "Concurrent requests per thread");
 DEFINE_double(drop_prob, 0, "Packet drop probability");
 DEFINE_string(profile, "", "Experiment profile to use");
 DEFINE_double(throttle, 0, "Throttle flows to incast receiver?");
 DEFINE_double(throttle_fraction, 1, "Fraction of fair share to throttle to.");
+
+/// Return the req sizes of different threads.
+std::vector<size_t> flags_get_req_sizes() {
+  std::vector<size_t> ret;
+  std::string req_str = FLAGS_req_sizes;
+  if (req_str.size() == 0) return ret;
+
+  std::vector<std::string> split_vec = erpc::split(req_str, ',');
+  erpc::rt_assert(split_vec.size() > 0);
+
+  for (auto &s : split_vec) ret.push_back(std::stoull(s));  // stoull trims ' '
+
+  return ret;
+}
+
+/// Return the req sizes of different threads.
+std::vector<size_t> flags_get_resp_sizes() {
+  std::vector<size_t> ret;
+  std::string resp_str = FLAGS_resp_sizes;
+  if (resp_str.size() == 0) return ret;
+
+  std::vector<std::string> split_vec = erpc::split(resp_str, ',');
+  erpc::rt_assert(split_vec.size() > 0);
+
+  for (auto &s : split_vec) ret.push_back(std::stoull(s));  // stoull trims ' '
+
+  return ret;
+}
 
 struct app_stats_t {
   double rx_gbps;
@@ -86,13 +114,13 @@ class AppContext : public BasicAppContext {
 };
 
 // Allocate request and response MsgBuffers
-void alloc_req_resp_msg_buffers(AppContext* c) {
+void alloc_req_resp_msg_buffers(AppContext* c, size_t req_size, size_t resp_size) {
   for (size_t i = 0; i < FLAGS_concurrency; i++) {
-    c->req_msgbuf[i] = c->rpc_->alloc_msg_buffer_or_die(FLAGS_req_size);
-    c->resp_msgbuf[i] = c->rpc_->alloc_msg_buffer_or_die(FLAGS_resp_size);
+    c->req_msgbuf[i] = c->rpc_->alloc_msg_buffer_or_die(req_size);
+    c->resp_msgbuf[i] = c->rpc_->alloc_msg_buffer_or_die(resp_size);
 
     // Fill the request regardless of kAppMemset. This is a one-time thing.
-    memset(c->req_msgbuf[i].buf_, kAppDataByte, FLAGS_req_size);
+    memset(c->req_msgbuf[i].buf_, kAppDataByte, req_size);
   }
 }
 

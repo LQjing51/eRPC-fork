@@ -34,9 +34,9 @@ std::function<void(AppContext *)> connect_sessions_func = nullptr;
 void app_cont_func(void *, void *);  // Forward declaration
 
 // Send a request using this MsgBuffer
-void send_req(AppContext *c, size_t msgbuf_idx) {
+void send_req(AppContext *c, size_t msgbuf_idx, size_t req_size) {
   erpc::MsgBuffer &req_msgbuf = c->req_msgbuf[msgbuf_idx];
-  assert(req_msgbuf.get_data_size() == FLAGS_req_size);
+  assert(req_msgbuf.get_data_size() == req_size);
 
   if (kAppVerbose) {
     printf("large_rpc_tput: Thread %zu sending request using msgbuf_idx %zu.\n",
@@ -48,7 +48,7 @@ void send_req(AppContext *c, size_t msgbuf_idx) {
                            &c->resp_msgbuf[msgbuf_idx], app_cont_func,
                            reinterpret_cast<void *>(msgbuf_idx));
 
-  c->stat_tx_bytes_tot += FLAGS_req_size;
+  c->stat_tx_bytes_tot += req_size;
 }
 
 void req_handler(erpc::ReqHandle *req_handle, void *_context) {
@@ -57,18 +57,21 @@ void req_handler(erpc::ReqHandle *req_handle, void *_context) {
   uint8_t resp_byte = req_msgbuf->buf_[0];
 
   // Use dynamic response
+  std::vector<size_t> resp_size_vec = flags_get_resp_sizes();
+  size_t resp_size =  resp_size_vec.at(c->thread_id_ % resp_size_vec.size());
+
   erpc::MsgBuffer &resp_msgbuf = req_handle->dyn_resp_msgbuf_;
-  resp_msgbuf = c->rpc_->alloc_msg_buffer_or_die(FLAGS_resp_size);
+  resp_msgbuf = c->rpc_->alloc_msg_buffer_or_die(resp_size);
 
   // Touch the response
   if (kAppServerMemsetResp) {
-    memset(resp_msgbuf.buf_, resp_byte, FLAGS_resp_size);
+    memset(resp_msgbuf.buf_, resp_byte, resp_size);
   } else {
     resp_msgbuf.buf_[0] = resp_byte;
   }
 
-  c->stat_rx_bytes_tot += FLAGS_req_size;
-  c->stat_tx_bytes_tot += FLAGS_resp_size;
+  c->stat_rx_bytes_tot += req_msgbuf->get_data_size();
+  c->stat_tx_bytes_tot += resp_size;
 
   c->rpc_->enqueue_response(req_handle, &resp_msgbuf);
 }
@@ -88,13 +91,12 @@ void app_cont_func(void *_context, void *_tag) {
   c->lat_vec.push_back(usec);
 
   // Check the response
-  erpc::rt_assert(resp_msgbuf.get_data_size() == FLAGS_resp_size,
-                  "Invalid response size");
+  size_t resp_size = resp_msgbuf.get_data_size();
 
   if (kAppClientCheckResp) {
     bool match = true;
     // Check all response cachelines (checking every byte is slow)
-    for (size_t i = 0; i < FLAGS_resp_size; i += 64) {
+    for (size_t i = 0; i < resp_size; i += 64) {
       if (resp_msgbuf.buf_[i] != kAppDataByte) match = false;
     }
     erpc::rt_assert(match, "Invalid resp data");
@@ -102,16 +104,18 @@ void app_cont_func(void *_context, void *_tag) {
     erpc::rt_assert(resp_msgbuf.buf_[0] == kAppDataByte, "Invalid resp data");
   }
 
-  c->stat_rx_bytes_tot += FLAGS_resp_size;
+  c->stat_rx_bytes_tot += resp_size;
+  
+  size_t req_size = c->req_msgbuf[msgbuf_idx].get_data_size();
 
   // Create a new request clocking this response, and put in request queue
   if (kAppClientMemsetReq) {
-    memset(c->req_msgbuf[msgbuf_idx].buf_, kAppDataByte, FLAGS_req_size);
+    memset(c->req_msgbuf[msgbuf_idx].buf_, kAppDataByte, req_size);
   } else {
     c->req_msgbuf[msgbuf_idx].buf_[0] = kAppDataByte;
   }
 
-  send_req(c, msgbuf_idx);
+  send_req(c, msgbuf_idx, req_size);
 }
 
 // The function executed by each thread in the cluster
@@ -122,8 +126,12 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
   if (thread_id == 0)
     c.tmp_stat_ = new TmpStat(app_stats_t::get_template_str());
 
+  std::vector<size_t> req_size_vec = flags_get_req_sizes();
+  std::vector<size_t> resp_size_vec = flags_get_resp_sizes();
   std::vector<size_t> port_vec = flags_get_numa_ports(FLAGS_numa_node);
-  erpc::rt_assert(port_vec.size() > 0);
+
+  size_t req_size = req_size_vec.at(thread_id % req_size_vec.size());
+  size_t resp_size = resp_size_vec.at(thread_id % resp_size_vec.size());
   uint8_t phy_port = port_vec.at(thread_id % port_vec.size());
 
   erpc::Rpc<erpc::CTransport> rpc(nexus, static_cast<void *>(&c),
@@ -146,14 +154,14 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
   }
 
   // All threads allocate MsgBuffers, but they may not send requests
-  alloc_req_resp_msg_buffers(&c);
+  alloc_req_resp_msg_buffers(&c, req_size, resp_size);
 
   size_t console_ref_tsc = erpc::rdtsc();
 
   // Any thread that creates a session sends requests
   if (c.session_num_vec_.size() > 0) {
     for (size_t msgbuf_idx = 0; msgbuf_idx < FLAGS_concurrency; msgbuf_idx++) {
-      send_req(&c, msgbuf_idx);
+      send_req(&c, msgbuf_idx, req_size);
     }
   }
 
@@ -191,8 +199,8 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
         "Gbps (IOPS). Retransmissions %zu. Packet RTTs: {%.1f, %.1f} us. "
         "RPC latency {%.1f 50th, %.1f 99th, %.1f 99.9th}. Timely rate %.1f "
         "Gbps. Credits %zu (best = 32).\n",
-        c.thread_id_, stats.rx_gbps, c.stat_rx_bytes_tot / FLAGS_resp_size,
-        stats.tx_gbps, c.stat_tx_bytes_tot / FLAGS_req_size, stats.re_tx,
+        c.thread_id_, stats.rx_gbps, c.stat_rx_bytes_tot / resp_size,
+        stats.tx_gbps, c.stat_tx_bytes_tot / req_size, stats.re_tx,
         stats.rtt_50_us, stats.rtt_99_us, stats.rpc_50_us, stats.rpc_99_us,
         stats.rpc_999_us, timely_0->get_rate_gbps(), erpc::kSessionCredits);
 
