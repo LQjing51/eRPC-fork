@@ -20,6 +20,8 @@
 #include "util/timer.h"
 #include "util/udp_client.h"
 
+#define KeepSend
+
 namespace erpc {
 
 /**
@@ -658,6 +660,8 @@ class Rpc {
 
   /// Implementation of the run_event_loop(timeout) API function
   void run_event_loop_timeout_st(size_t timeout_ms);
+
+  void fake_process_resp(SSlot* sslot);
 
   /// Actually run one iteration of the event loop
   void run_event_loop_do_one_st();

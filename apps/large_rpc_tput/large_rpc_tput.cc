@@ -24,9 +24,10 @@ static constexpr size_t kAppEvLoopMs = 1000;  // Duration of event loop
 static constexpr bool kAppVerbose = false;
 
 // Experiment control flags
-static constexpr bool kAppClientMemsetReq = false;   // Fill entire request
-static constexpr bool kAppServerMemsetResp = false;  // Fill entire response
-static constexpr bool kAppClientCheckResp = false;   // Check entire response
+static constexpr bool kAppClientMemsetReq = true;   // Fill entire request
+static constexpr bool kAppServerMemsetResp = true;  // Fill entire response
+static constexpr bool kAppClientCheckResp = true;   // Check entire response
+static constexpr bool kAppServerCheckReq = true;   // Check entire request
 
 // Profile-specifc session connection function
 std::function<void(AppContext *)> connect_sessions_func = nullptr;
@@ -54,7 +55,24 @@ void send_req(AppContext *c, size_t msgbuf_idx, size_t req_size) {
 void req_handler(erpc::ReqHandle *req_handle, void *_context) {
   auto *c = static_cast<AppContext *>(_context);
   const erpc::MsgBuffer *req_msgbuf = req_handle->get_req_msgbuf();
+  #ifdef KeepSend
+  size_t cur_size = req_msgbuf->get_data_size();
+  c->stat_rx_bytes_tot += cur_size;
+  #else
+
   uint8_t resp_byte = req_msgbuf->buf_[0];
+
+  size_t req_size = req_msgbuf->get_data_size();
+  if (kAppServerCheckReq) {
+    bool match = true;
+    // Check all request cachelines (checking every byte is slow)
+    for (size_t i = 0; i < req_size; i += 64) {
+      if (req_msgbuf->buf_[i] != kAppDataByte) match = false;
+    }
+    erpc::rt_assert(match, "Invalid req data");
+  } else {
+    erpc::rt_assert(req_msgbuf->buf_[0] == kAppDataByte, "Invalid req data");
+  }
 
   // Use dynamic response
   std::vector<size_t> resp_size_vec = flags_get_resp_sizes();
@@ -74,12 +92,13 @@ void req_handler(erpc::ReqHandle *req_handle, void *_context) {
   c->stat_tx_bytes_tot += resp_size;
 
   c->rpc_->enqueue_response(req_handle, &resp_msgbuf);
+  #endif
 }
 
 void app_cont_func(void *_context, void *_tag) {
   auto *c = static_cast<AppContext *>(_context);
   auto msgbuf_idx = reinterpret_cast<size_t>(_tag);
-
+  #ifndef KeepSend
   const erpc::MsgBuffer &resp_msgbuf = c->resp_msgbuf[msgbuf_idx];
   if (kAppVerbose) {
     printf("large_rpc_tput: Received response for msgbuf %zu.\n", msgbuf_idx);
@@ -105,7 +124,8 @@ void app_cont_func(void *_context, void *_tag) {
   }
 
   c->stat_rx_bytes_tot += resp_size;
-  
+  #endif
+
   size_t req_size = c->req_msgbuf[msgbuf_idx].get_data_size();
 
   // Create a new request clocking this response, and put in request queue
