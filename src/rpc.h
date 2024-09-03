@@ -20,7 +20,7 @@
 #include "util/timer.h"
 #include "util/udp_client.h"
 
-#define KeepSend
+// #define KeepSend
 
 namespace erpc {
 
