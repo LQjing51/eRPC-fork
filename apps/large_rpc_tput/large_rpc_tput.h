@@ -10,7 +10,7 @@
 
 static constexpr size_t kAppReqType = 1;
 static constexpr uint8_t kAppDataByte = 3;  // Data transferred in req & resp
-static constexpr size_t kAppMaxConcurrency = 32;  // Outstanding reqs per thread
+static constexpr size_t kAppMaxConcurrency = 4096;  // Outstanding reqs per thread
 
 // Globals
 volatile sig_atomic_t ctrl_c_pressed = 0;
@@ -21,7 +21,7 @@ DEFINE_uint64(num_proc_0_threads, 0, "Threads in process 0");
 DEFINE_uint64(num_proc_other_threads, 0, "Threads in process with ID != 0");
 DEFINE_string(req_sizes, "", "Request data size");
 DEFINE_string(resp_sizes, "", "Response data size");
-DEFINE_uint64(concurrency, 0, "Concurrent requests per thread");
+DEFINE_string(concurrency, "", "Concurrent requests per thread");
 DEFINE_double(drop_prob, 0, "Packet drop probability");
 DEFINE_string(profile, "", "Experiment profile to use");
 DEFINE_double(throttle, 0, "Throttle flows to incast receiver?");
@@ -48,6 +48,20 @@ std::vector<size_t> flags_get_resp_sizes() {
   if (resp_str.size() == 0) return ret;
 
   std::vector<std::string> split_vec = erpc::split(resp_str, ',');
+  erpc::rt_assert(split_vec.size() > 0);
+
+  for (auto &s : split_vec) ret.push_back(std::stoull(s));  // stoull trims ' '
+
+  return ret;
+}
+
+/// Return the concurrency values of different threads.
+std::vector<size_t> flags_get_concur() {
+  std::vector<size_t> ret;
+  std::string concur_str = FLAGS_concurrency;
+  if (concur_str.size() == 0) return ret;
+
+  std::vector<std::string> split_vec = erpc::split(concur_str, ',');
   erpc::rt_assert(split_vec.size() > 0);
 
   for (auto &s : split_vec) ret.push_back(std::stoull(s));  // stoull trims ' '
@@ -114,8 +128,8 @@ class AppContext : public BasicAppContext {
 };
 
 // Allocate request and response MsgBuffers
-void alloc_req_resp_msg_buffers(AppContext* c, size_t req_size, size_t resp_size) {
-  for (size_t i = 0; i < FLAGS_concurrency; i++) {
+void alloc_req_resp_msg_buffers(AppContext* c, size_t req_size, size_t resp_size, size_t concur) {
+  for (size_t i = 0; i < concur; i++) {
     c->req_msgbuf[i] = c->rpc_->alloc_msg_buffer_or_die(req_size);
     c->resp_msgbuf[i] = c->rpc_->alloc_msg_buffer_or_die(resp_size);
 

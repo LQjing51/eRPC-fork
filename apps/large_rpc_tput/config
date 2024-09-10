@@ -4,7 +4,7 @@
 --num_processes 2
 --num_proc_0_threads 2
 --num_proc_other_threads 2
---concurrency 1
+--concurrency 2048,1
 --drop_prob 0.0
 --profile incast
 --throttle 0

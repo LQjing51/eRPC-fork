@@ -148,11 +148,15 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
 
   std::vector<size_t> req_size_vec = flags_get_req_sizes();
   std::vector<size_t> resp_size_vec = flags_get_resp_sizes();
+  std::vector<size_t> concur_vec = flags_get_concur();
   std::vector<size_t> port_vec = flags_get_numa_ports(FLAGS_numa_node);
 
   size_t req_size = req_size_vec.at(thread_id % req_size_vec.size());
   size_t resp_size = resp_size_vec.at(thread_id % resp_size_vec.size());
+  size_t concur = concur_vec.at(thread_id % resp_size_vec.size());
   uint8_t phy_port = port_vec.at(thread_id % port_vec.size());
+
+  erpc::rt_assert(concur <= kAppMaxConcurrency, "Invalid conc");
 
   erpc::Rpc<erpc::CTransport> rpc(nexus, static_cast<void *>(&c),
                                   static_cast<uint8_t>(thread_id),
@@ -174,13 +178,13 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
   }
 
   // All threads allocate MsgBuffers, but they may not send requests
-  alloc_req_resp_msg_buffers(&c, req_size, resp_size);
+  alloc_req_resp_msg_buffers(&c, req_size, resp_size, concur);
 
   size_t console_ref_tsc = erpc::rdtsc();
 
   // Any thread that creates a session sends requests
   if (c.session_num_vec_.size() > 0) {
-    for (size_t msgbuf_idx = 0; msgbuf_idx < FLAGS_concurrency; msgbuf_idx++) {
+    for (size_t msgbuf_idx = 0; msgbuf_idx < concur; msgbuf_idx++) {
       send_req(&c, msgbuf_idx, req_size);
     }
   }
@@ -288,7 +292,6 @@ void setup_profile() {
 int main(int argc, char **argv) {
   signal(SIGINT, ctrl_c_handler);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
-  erpc::rt_assert(FLAGS_concurrency <= kAppMaxConcurrency, "Invalid conc");
   erpc::rt_assert(FLAGS_profile == "incast" || FLAGS_profile == "victim",
                   "Invalid profile");
   erpc::rt_assert(FLAGS_process_id < FLAGS_num_processes, "Invalid process ID");
