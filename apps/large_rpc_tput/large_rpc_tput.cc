@@ -24,10 +24,10 @@ static constexpr size_t kAppEvLoopMs = 1000;  // Duration of event loop
 static constexpr bool kAppVerbose = false;
 
 // Experiment control flags
-static constexpr bool kAppClientMemsetReq = true;   // Fill entire request
+static constexpr bool kAppClientMemsetReq = false;   // Fill entire request
 static constexpr bool kAppServerMemsetResp = true;  // Fill entire response
-static constexpr bool kAppClientCheckResp = true;   // Check entire response
-static constexpr bool kAppServerCheckReq = true;   // Check entire request
+static constexpr bool kAppClientCheckResp = false;   // Check entire response
+static constexpr bool kAppServerCheckReq = false;   // Check entire request
 
 // Profile-specifc session connection function
 std::function<void(AppContext *)> connect_sessions_func = nullptr;
@@ -75,8 +75,7 @@ void req_handler(erpc::ReqHandle *req_handle, void *_context) {
   }
 
   // Use dynamic response
-  std::vector<size_t> resp_size_vec = flags_get_resp_sizes();
-  size_t resp_size =  resp_size_vec.at(c->thread_id_ % resp_size_vec.size());
+  size_t resp_size = c->resp_msgbuf[0].get_data_size();
 
   erpc::MsgBuffer &resp_msgbuf = req_handle->dyn_resp_msgbuf_;
   resp_msgbuf = c->rpc_->alloc_msg_buffer_or_die(resp_size);
