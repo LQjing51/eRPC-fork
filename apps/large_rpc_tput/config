@@ -1,10 +1,10 @@
 --test_ms 300000
---req_sizes 1024,7900000
---resp_sizes 1024,7900000
+--req_sizes 456
+--resp_sizes 456
 --num_processes 2
---num_proc_0_threads 2
---num_proc_other_threads 2
---concurrency 2048,1
+--num_proc_0_threads 16
+--num_proc_other_threads 16
+--concurrency 128
 --drop_prob 0.0
 --profile incast
 --throttle 0
