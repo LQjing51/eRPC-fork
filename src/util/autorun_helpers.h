@@ -95,6 +95,31 @@ static std::string get_udp_port_for_process(size_t process_i) {
   return split_vec[1];
 }
 
+/// Return the ip of used rdma nic
+static std::string get_ip() {
+  std::string process_file = "scripts/autorun_process_file";
+  std::string line = get_line_n(process_file, 2);
+  return line;
+}
+
+/// Return the switch mac between server and client
+static bool get_switch_mac(uint8_t* mac) {
+  std::string process_file = "scripts/autorun_process_file";
+  std::ifstream in(process_file.c_str());
+  std::string line;
+  for (size_t i = 0; i < 3; i++) {
+    std::getline(in, line);
+  }
+  std::getline(in, line);
+  if(line.empty()) return false;
+
+  std::vector<std::string> split_vec = split(line, ':');
+  for(size_t i = 0; i < 6; i++) {
+    mac[i] = std::stoi(split_vec[i], nullptr, 16);
+  }
+  return true;
+}
+
 /// Return the URI of the process with index process_i
 static std::string get_uri_for_process(size_t process_i) {
   std::string hostname = erpc::get_hostname_for_process(process_i);

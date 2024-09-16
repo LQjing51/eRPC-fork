@@ -273,6 +273,7 @@ class DpdkTransport : public Transport {
 
   // dpdk_transport_datapath.cc
   void tx_burst(const tx_burst_item_t *tx_burst_arr, size_t num_pkts);
+  void tx_burst_for_arp(arp_hdr_t* arph);
   void tx_flush();
   size_t rx_burst();
   void post_recvs(size_t num_recvs);
@@ -321,6 +322,7 @@ class DpdkTransport : public Transport {
   struct {
     uint32_t ipv4_addr_;   // The port's IPv4 address in host-byte order
     uint8_t mac_addr_[6];  // The port's MAC address
+    uint8_t switch_addr_[6]; // The switch mac between server and client
     size_t bandwidth_;     // Link bandwidth in bytes per second
     size_t reta_size_;     // Number of entries in NIC RX indirection table
   } resolve_;
