@@ -3,6 +3,10 @@
 #include "ib_transport.h"
 
 namespace erpc {
+void IBTransport::tx_burst_for_arp(arp_hdr_t* req_hdr){
+  //unused
+  _unused(req_hdr);
+}
 
 // Packets that are the first packet in their MsgBuffer use one DMA, and may
 // be inlined. Packets that are not the first packet use two DMAs, and are never

@@ -20,17 +20,6 @@
 #include "util/timer.h"
 #include "util/udp_client.h"
 
-#define TACC_CLIENT_IP "10.2.16.1"
-#define TACC_SERVER_IP "10.2.15.1"
-
-static constexpr uint8_t TACC_CLIENT_MAC[6] = {0xb8, 0xce, 0xf6, 0x7f, 0x28, 0x08,};
-static constexpr uint8_t TACC_SERVER_MAC[6] = {0xb8, 0xce, 0xf6, 0x7f, 0x16, 0x10,};
-static constexpr uint8_t TACC_Switch_Mac[6] = {0x1c, 0x34, 0xda, 0xf3, 0x99, 0xc8,};
-
-// #define KeepSend
-#define MACHINE_IP TACC_CLIENT_IP
-#define MACHINE_MAC TACC_CLIENT_MAC
-
 namespace erpc {
 
 /**

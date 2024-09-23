@@ -84,7 +84,7 @@ struct ibv_ah *IBTransport::create_ah(const ib_routing_info_t *ib_rinfo) const {
     ah_attr.grh.dgid.global.interface_id = ib_rinfo->gid.global.interface_id;
     ah_attr.grh.dgid.global.subnet_prefix = ib_rinfo->gid.global.subnet_prefix;
     ah_attr.grh.sgid_index = kDefaultGIDIndex;
-    ah_attr.grh.hop_limit = 1;
+    ah_attr.grh.hop_limit = 0xFF;
   }
 
   return ibv_create_ah(pd, &ah_attr);

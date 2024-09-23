@@ -2,12 +2,12 @@
 --req_sizes 456
 --resp_sizes 456
 --num_processes 2
---num_proc_0_threads 1
---num_proc_other_threads 1
---concurrency 1
+--num_proc_0_threads 16
+--num_proc_other_threads 16
+--concurrency 32
 --drop_prob 0.0
 --profile incast
 --throttle 0
 --throttle_fraction 0.9
 --numa_0_ports 0
---numa_1_ports 0
+--numa_1_ports 2

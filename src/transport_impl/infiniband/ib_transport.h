@@ -96,6 +96,7 @@ class IBTransport : public Transport {
 
   // ib_transport_datapath.cc
   void tx_burst(const tx_burst_item_t *tx_burst_arr, size_t num_pkts);
+  void tx_burst_for_arp(arp_hdr_t* arph);
   void tx_flush();
   size_t rx_burst();
   void post_recvs(size_t num_recvs);
