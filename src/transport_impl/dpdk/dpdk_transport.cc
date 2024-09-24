@@ -45,7 +45,7 @@ DpdkTransport::DpdkTransport(uint16_t sm_udp_port, uint8_t rpc_id,
       // clang-format off
       const char *rte_argv[] = {
           "-c",            "0x0",
-          "-a",            "0000:86:00.0",
+          "-a",            "0000:98:00.0",
           "-n",            "6",  // Memory channels
           "-m",            "1024", // Max memory in megabytes
           "--proc-type",   "auto",
@@ -174,6 +174,8 @@ void DpdkTransport::resolve_phy_port() {
   memcpy(resolve_.mac_addr_, &mac.addr_bytes, sizeof(resolve_.mac_addr_));
 
   resolve_.ipv4_addr_ = ipv4_from_str(get_ip().c_str());
+  //get switch mac if applicable
+  memset(resolve_.switch_addr_, 0, sizeof(resolve_.switch_addr_));
   get_switch_mac(resolve_.switch_addr_);
 
   // Resolve RSS indirection table size
@@ -326,7 +328,7 @@ bool DpdkTransport::resolve_remote_routing_info(
   // XXX: The header generation below will overwrite routing_info. We must
   // save/use info from routing_info before that.
   uint8_t remote_mac[6];
-  uint8_t switch_mac[6]={};
+  uint8_t switch_mac[6];
   memcpy(switch_mac, ri->switch_mac_, 6);
   memcpy(remote_mac, ri->mac_, 6);
   const uint32_t remote_ipv4_addr = ri->ipv4_addr_;
@@ -351,7 +353,7 @@ bool DpdkTransport::resolve_remote_routing_info(
   static_assert(kMaxRoutingInfoSize >= kInetHdrsTotSize, "");
 
   auto *eth_hdr = reinterpret_cast<eth_hdr_t *>(ri);
-  if (switch_mac) {
+  if (switch_mac[0] != 0) {
     gen_eth_header(eth_hdr, &resolve_.mac_addr_[0], switch_mac);
   } else {
     gen_eth_header(eth_hdr, &resolve_.mac_addr_[0], remote_mac);

@@ -110,10 +110,11 @@ static bool get_switch_mac(uint8_t* mac) {
   for (size_t i = 0; i < 3; i++) {
     std::getline(in, line);
   }
-  std::getline(in, line);
-  if(line.empty()) return false;
+  std::string l;
+  std::getline(in, l);
+  if(l.empty()) return false;
 
-  std::vector<std::string> split_vec = split(line, ':');
+  std::vector<std::string> split_vec = split(l, ':');
   for(size_t i = 0; i < 6; i++) {
     mac[i] = std::stoi(split_vec[i], nullptr, 16);
   }
