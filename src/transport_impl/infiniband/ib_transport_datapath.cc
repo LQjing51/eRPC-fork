@@ -58,7 +58,7 @@ void IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr,
 
     const auto* ib_rinfo =
         reinterpret_cast<ib_routing_info_t*>(item.routing_info_);
-    wr.wr.ud.ah = ib_rinfo->ah;
+    wr.wr.ud.ah =  msg_buffer->get_data_size() > 2000 ? ib_rinfo->low_tc_ah : ib_rinfo->high_tc_ah;
     wr.wr.ud.remote_qpn = ib_rinfo->qpn;
     if (kTesting && item.drop_) wr.wr.ud.remote_qpn = 0;
   }

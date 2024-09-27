@@ -62,7 +62,8 @@ class IBTransport : public Transport {
     union ibv_gid gid;  // RoCE only
 
     // Fields that are meaningful only locally
-    struct ibv_ah *ah;
+    struct ibv_ah *high_tc_ah;
+    struct ibv_ah *low_tc_ah;
   };
   static_assert(sizeof(ib_routing_info_t) <= kMaxRoutingInfoSize, "");
 
@@ -74,7 +75,7 @@ class IBTransport : public Transport {
   ~IBTransport();
 
   /// Create an address handle using this routing info
-  struct ibv_ah *create_ah(const ib_routing_info_t *) const;
+  struct ibv_ah *create_ah(const ib_routing_info_t *, uint8_t tc) const;
 
   void fill_local_routing_info(routing_info_t *routing_info) const;
   bool resolve_remote_routing_info(routing_info_t *routing_info);

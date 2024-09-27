@@ -71,7 +71,7 @@ IBTransport::~IBTransport() {
   exit_assert(ibv_close_device(resolve.ib_ctx) == 0, "Failed to close device");
 }
 
-struct ibv_ah *IBTransport::create_ah(const ib_routing_info_t *ib_rinfo) const {
+struct ibv_ah *IBTransport::create_ah(const ib_routing_info_t *ib_rinfo, uint8_t tc) const {
   struct ibv_ah_attr ah_attr;
   memset(&ah_attr, 0, sizeof(struct ibv_ah_attr));
   ah_attr.is_global = kIsRoCE ? 1 : 0;
@@ -85,6 +85,7 @@ struct ibv_ah *IBTransport::create_ah(const ib_routing_info_t *ib_rinfo) const {
     ah_attr.grh.dgid.global.subnet_prefix = ib_rinfo->gid.global.subnet_prefix;
     ah_attr.grh.sgid_index = kDefaultGIDIndex;
     ah_attr.grh.hop_limit = 0xFF;
+    ah_attr.grh.traffic_class = tc;
   }
 
   return ibv_create_ah(pd, &ah_attr);
@@ -100,9 +101,11 @@ void IBTransport::fill_local_routing_info(routing_info_t *routing_info) const {
 
 bool IBTransport::resolve_remote_routing_info(routing_info_t *routing_info) {
   auto *ib_rinfo = reinterpret_cast<ib_routing_info_t *>(routing_info);
-  ib_rinfo->ah = create_ah(ib_rinfo);
-  ah_to_free_vec.push_back(ib_rinfo->ah);
-  return (ib_rinfo->ah != nullptr);
+  ib_rinfo->high_tc_ah = create_ah(ib_rinfo, 0);
+  ib_rinfo->low_tc_ah = create_ah(ib_rinfo, 0);
+  ah_to_free_vec.push_back(ib_rinfo->high_tc_ah);
+  ah_to_free_vec.push_back(ib_rinfo->low_tc_ah);
+  return (ib_rinfo->high_tc_ah != nullptr && ib_rinfo->low_tc_ah != nullptr);
 }
 
 void IBTransport::ib_resolve_phy_port() {
@@ -180,7 +183,7 @@ void IBTransport::init_verbs_structs() {
   routing_info_t self_routing_info;
   fill_local_routing_info(&self_routing_info);
   self_ah =
-      create_ah(reinterpret_cast<ib_routing_info_t *>(&self_routing_info));
+      create_ah(reinterpret_cast<ib_routing_info_t *>(&self_routing_info), 0);
   rt_assert(self_ah != nullptr, "Failed to create self AH.");
 
   // Reuse rtr_attr for RTS
