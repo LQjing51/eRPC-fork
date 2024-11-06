@@ -32,7 +32,7 @@ DpdkTransport::DpdkTransport(uint16_t sm_udp_port, uint8_t rpc_id,
   {
     // The first thread to grab the lock initializes DPDK
     g_dpdk_lock.lock();
-
+    rte_thread_register();
     if (g_dpdk_initialized) {
       ERPC_INFO("DPDK transport for Rpc %u skipping DPDK EAL initialization.\n",
                 rpc_id);

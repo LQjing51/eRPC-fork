@@ -24,10 +24,10 @@ static constexpr size_t kAppEvLoopMs = 1000;  // Duration of event loop
 static constexpr bool kAppVerbose = false;
 
 // Experiment control flags
-static constexpr bool kAppClientMemsetReq = true;   // Fill entire request
+static constexpr bool kAppClientMemsetReq = false;   // Fill entire request
 static constexpr bool kAppServerMemsetResp = true;  // Fill entire response
-static constexpr bool kAppClientCheckResp = true;   // Check entire response
-static constexpr bool kAppServerCheckReq = true;   // Check entire request
+static constexpr bool kAppClientCheckResp = false;   // Check entire response
+static constexpr bool kAppServerCheckReq = false;   // Check entire request
 
 // Profile-specifc session connection function
 std::function<void(AppContext *)> connect_sessions_func = nullptr;

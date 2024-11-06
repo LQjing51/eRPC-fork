@@ -17,7 +17,7 @@ static constexpr size_t kAppPutFgType = 3;
 static constexpr size_t kAppPutBgType = 4;
 static constexpr size_t kAppEvLoopMs = 500;
 
-static constexpr size_t kAppMaxReqWindow = 256;  // Max pending reqs per client
+static constexpr size_t kAppMaxReqWindow = 1024;  // Max pending reqs per client
 
 // Globals
 volatile sig_atomic_t ctrl_c_pressed = 0;
@@ -49,7 +49,7 @@ req/resp pkt size : key size : value size
 class KV {
 public:
   static constexpr size_t kKeySize = 16;
-  static constexpr size_t kValueSize = 64;
+  static constexpr size_t kValueSize = 256;
 
   typedef struct {
     uint8_t key_[kKeySize];
@@ -62,9 +62,10 @@ public:
   KV(size_t initial_size) {
     for(size_t i = 0; i < initial_size; i++){
       key_t key;
+      size_t k = i;
       for(size_t t = 0; t < kKeySize; t++) {
-        key.key_[t] = i & ((1<<8) - 1);
-        i >>= 8;
+        key.key_[t] = k & ((1<<8) - 1);
+        k >>= 8;
       }
       value_t value;
       size_t v = i*0x12345+0x10501;
