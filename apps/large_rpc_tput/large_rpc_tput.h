@@ -22,6 +22,7 @@ DEFINE_uint64(num_proc_other_threads, 0, "Threads in process with ID != 0");
 DEFINE_string(req_sizes, "", "Request data size");
 DEFINE_string(resp_sizes, "", "Response data size");
 DEFINE_string(concurrency, "", "Concurrent requests per thread");
+DEFINE_uint64(app_ticks, 0, "add ticks when processing per packet");
 DEFINE_double(drop_prob, 0, "Packet drop probability");
 DEFINE_string(profile, "", "Experiment profile to use");
 DEFINE_double(throttle, 0, "Throttle flows to incast receiver?");

@@ -27,7 +27,7 @@ static constexpr bool kAppVerbose = false;
 static constexpr bool kAppClientMemsetReq = false;   // Fill entire request
 static constexpr bool kAppServerMemsetResp = true;  // Fill entire response
 static constexpr bool kAppClientCheckResp = false;   // Check entire response
-static constexpr bool kAppServerCheckReq = false;   // Check entire request
+static constexpr bool kAppServerCheckReq = true;   // Check entire request
 
 // Profile-specifc session connection function
 std::function<void(AppContext *)> connect_sessions_func = nullptr;
@@ -51,6 +51,14 @@ void send_req(AppContext *c, size_t msgbuf_idx, size_t req_size) {
 
   c->stat_tx_bytes_tot += req_size;
 }
+
+  void add_ticks() {
+    uint64_t s_tick, passed_ticks = 0;
+    s_tick = erpc::rdtsc();
+    do {
+      passed_ticks = erpc::rdtsc() - s_tick;
+    } while(passed_ticks < FLAGS_app_ticks);
+  }
 
 void req_handler(erpc::ReqHandle *req_handle, void *_context) {
   auto *c = static_cast<AppContext *>(_context);
@@ -89,6 +97,8 @@ void req_handler(erpc::ReqHandle *req_handle, void *_context) {
 
   c->stat_rx_bytes_tot += req_msgbuf->get_data_size();
   c->stat_tx_bytes_tot += resp_size;
+
+  add_ticks();
 
   c->rpc_->enqueue_response(req_handle, &resp_msgbuf);
   #endif
@@ -165,6 +175,7 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
 
   c.rpc_ = &rpc;
 
+  printf("freq: %.3f\n", rpc.get_freq_ghz());
   // Create the session. Some threads may not create any sessions, and therefore
   // not run the event loop required for other threads to connect them. This
   // is OK because all threads will run the event loop below.

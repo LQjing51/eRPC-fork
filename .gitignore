@@ -73,4 +73,5 @@ third_party
 # vscode
 .clang_complete
 .cache
+.vscode
 compile_commands.json
