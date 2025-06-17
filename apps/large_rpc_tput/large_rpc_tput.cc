@@ -25,9 +25,9 @@ static constexpr bool kAppVerbose = false;
 
 // Experiment control flags
 static constexpr bool kAppClientMemsetReq = false;   // Fill entire request
-static constexpr bool kAppServerMemsetResp = true;  // Fill entire response
+static constexpr bool kAppServerMemsetResp = false;  // Fill entire response
 static constexpr bool kAppClientCheckResp = false;   // Check entire response
-static constexpr bool kAppServerCheckReq = true;   // Check entire request
+static constexpr bool kAppServerCheckReq = false;   // Check entire request
 
 // Profile-specifc session connection function
 std::function<void(AppContext *)> connect_sessions_func = nullptr;

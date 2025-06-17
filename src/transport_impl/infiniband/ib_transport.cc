@@ -88,6 +88,11 @@ struct ibv_ah *IBTransport::create_ah(const ib_routing_info_t *ib_rinfo, uint8_t
     ah_attr.grh.traffic_class = tc;
   }
 
+  printf("ah attr: is_global %d, dlid %d, sl %d, src_path_bits %d, port_num %d, subnet prefix %lld, interface id %lld\n", ah_attr.is_global,
+    ah_attr.dlid, ah_attr.sl, ah_attr.src_path_bits,
+    ah_attr.port_num, ah_attr.grh.dgid.global.subnet_prefix,
+    ah_attr.grh.dgid.global.interface_id);
+
   return ibv_create_ah(pd, &ah_attr);
 }
 
