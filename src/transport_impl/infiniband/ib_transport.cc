@@ -110,6 +110,7 @@ bool IBTransport::resolve_remote_routing_info(routing_info_t *routing_info) {
   ib_rinfo->low_tc_ah = create_ah(ib_rinfo, 0);
   ah_to_free_vec.push_back(ib_rinfo->high_tc_ah);
   ah_to_free_vec.push_back(ib_rinfo->low_tc_ah);
+  printf("remote qpn:%x\n", ib_rinfo->qpn);
   return (ib_rinfo->high_tc_ah != nullptr && ib_rinfo->low_tc_ah != nullptr);
 }
 

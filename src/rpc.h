@@ -19,6 +19,7 @@
 #include "util/rand.h"
 #include "util/timer.h"
 #include "util/udp_client.h"
+#include "hostcc.h"
 
 namespace erpc {
 
