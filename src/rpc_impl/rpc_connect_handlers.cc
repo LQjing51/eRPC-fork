@@ -66,6 +66,7 @@ void Rpc<TTr>::handle_connect_req_st(const SmPkt &sm_pkt) {
   }
 
   // HostCC::add_qp_id_daemon(*(reinterpret_cast<uint32_t*>(&(client_rinfo.buf_[4]))));
+  HostCC::write_qp_id_to_file(*(reinterpret_cast<uint32_t*>(&(client_rinfo.buf_[4]))));
 
   if (!resolve_success) {
     std::string routing_info_str = TTr::routing_info_str(&client_rinfo);
