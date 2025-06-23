@@ -381,9 +381,9 @@ if(NOT WIN32)
   set(LIBRARIES ${LIBRARIES} rt numa pthread)
 endif()
 
-include_directories(/home/qijing/RhyR/baseline)
+include_directories(/home/qijing/RhyR/include)
 link_directories(/home/qijing/RhyR/build)
-set(LIBRARIES ${LIBRARIES} "-L/home/qijing/RhyR/build -lHostCC -Wl,-rpath,/home/qijing/RhyR/build")
+set(LIBRARIES ${LIBRARIES} "-L/home/qijing/RhyR/build -lRhyR -Wl,-rpath,/home/qijing/RhyR/build")
 
 # Compile the library
 add_library(erpc ${SOURCES})

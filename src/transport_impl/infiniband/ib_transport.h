@@ -9,6 +9,7 @@
 #include "transport.h"
 #include "transport_impl/verbs_common.h"
 #include "util/logger.h"
+#include "rhyr.h"
 
 namespace erpc {
 
