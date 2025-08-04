@@ -32,6 +32,9 @@ static constexpr bool kAppServerCheckReq = true;   // Check entire request
 // Profile-specifc session connection function
 std::function<void(AppContext *)> connect_sessions_func = nullptr;
 
+// Global variable to track the next msgbuf index to use
+std::vector<size_t> loop_msgbuf_idx_vec(16, 0);
+
 void app_cont_func(void *, void *);  // Forward declaration
 
 // Send a request using this MsgBuffer
@@ -137,14 +140,16 @@ void app_cont_func(void *_context, void *_tag) {
 
   size_t req_size = c->req_msgbuf[msgbuf_idx].get_data_size();
 
+  size_t* idx = &(loop_msgbuf_idx_vec[c->thread_id_]);
   // Create a new request clocking this response, and put in request queue
   if (kAppClientMemsetReq) {
-    memset(c->req_msgbuf[msgbuf_idx].buf_, kAppDataByte, req_size);
+    memset(c->req_msgbuf[*idx].buf_, kAppDataByte, req_size);
   } else {
-    c->req_msgbuf[msgbuf_idx].buf_[0] = kAppDataByte;
+    c->req_msgbuf[*idx].buf_[0] = kAppDataByte;
   }
 
-  send_req(c, msgbuf_idx, req_size);
+  send_req(c, *idx, req_size);
+  *idx = (*idx + 1) % kAppMaxConcurrency;
 }
 
 // The function executed by each thread in the cluster
@@ -236,7 +241,7 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
         c.thread_id_, stats.rx_gbps, c.stat_rx_bytes_tot / resp_size,
         stats.tx_gbps, c.stat_tx_bytes_tot / req_size, stats.re_tx,
         stats.rtt_50_us, stats.rtt_99_us, stats.rpc_50_us, stats.rpc_99_us,
-        stats.rpc_999_us, timely_0->get_rate_gbps(), erpc::kSessionCredits);
+        stats.rpc_999_us, timely_0->get_rate_gbps(), c.rpc_->get_credits(c.session_num_vec_[0]));
 
     // Reset stats for next iteration
     c.stat_rx_bytes_tot = 0;

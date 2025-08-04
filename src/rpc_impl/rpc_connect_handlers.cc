@@ -48,12 +48,12 @@ void Rpc<TTr>::handle_connect_req_st(const SmPkt &sm_pkt) {
     return;
   }
 
-  // Check if we are allowed to create another session
-  if (!have_ring_entries()) {
-    ERPC_WARN("%s: Ring buffers exhausted. Sending response.\n", issue_msg);
-    sm_pkt_udp_tx_st(sm_construct_resp(sm_pkt, SmErrType::kRingExhausted));
-    return;
-  }
+  // // Check if we are allowed to create another session
+  // if (!have_ring_entries()) {
+  //   ERPC_WARN("%s: Ring buffers exhausted. Sending response.\n", issue_msg);
+  //   sm_pkt_udp_tx_st(sm_construct_resp(sm_pkt, SmErrType::kRingExhausted));
+  //   return;
+  // }
 
   // Try to resolve the client-provided routing info. If session creation
   // succeeds, we'll copy it to the server's session endpoint.

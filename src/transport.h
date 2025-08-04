@@ -23,7 +23,7 @@ enum class TransportType { kInfiniBand, kRaw, kDPDK, kFake, kInvalid };
 /// Generic unreliable transport
 class Transport {
  public:
-  static constexpr size_t kNumRxRingEntries = 4096;
+  static constexpr size_t kNumRxRingEntries = 8192;
   static_assert(is_power_of_two<size_t>(kNumRxRingEntries), "");
 
   static constexpr size_t kMaxRoutingInfoSize = 48;  ///< Space for routing info

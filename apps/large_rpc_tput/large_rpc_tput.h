@@ -10,7 +10,7 @@
 
 static constexpr size_t kAppReqType = 1;
 static constexpr uint8_t kAppDataByte = 3;  // Data transferred in req & resp
-static constexpr size_t kAppMaxConcurrency = 4096;  // Outstanding reqs per thread
+static constexpr size_t kAppMaxConcurrency = 8192;  // Outstanding reqs per thread
 
 // Globals
 volatile sig_atomic_t ctrl_c_pressed = 0;

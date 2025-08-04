@@ -66,8 +66,8 @@ void IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr,
   send_wr[num_pkts - 1].next = nullptr;  // Breaker of chains, first of her name
 
   struct ibv_send_wr* bad_wr;
-  // int ret = ibv_post_send(qp, &send_wr[0], &bad_wr);
-  int ret = RhyR::swift_post_send(qp, &send_wr[0], &bad_wr);
+  int ret = ibv_post_send(qp, &send_wr[0], &bad_wr);
+  // int ret = RhyR::swift_post_send(qp, &send_wr[0], &bad_wr);
   if (unlikely(ret != 0)) {
     fprintf(stderr, "eRPC: Fatal error. ibv_post_send failed. ret = %d\n", ret);
     assert(ret == 0);
@@ -122,8 +122,8 @@ void IBTransport::tx_flush() {
 }
 
 size_t IBTransport::rx_burst() {
-  // int ret = ibv_poll_cq(recv_cq, kPostlist, recv_wc);
-  int ret = RhyR::swift_poll_recv_cq(recv_cq, kPostlist, recv_wc);
+  int ret = ibv_poll_cq(recv_cq, kPostlist, recv_wc);
+  // int ret = RhyR::swift_poll_recv_cq(recv_cq, kPostlist, recv_wc);
   assert(ret >= 0);
   return static_cast<size_t>(ret);
 }

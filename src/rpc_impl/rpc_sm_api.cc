@@ -41,11 +41,11 @@ int Rpc<TTr>::create_session_st(std::string remote_uri, uint8_t rem_rpc_id) {
     return -EINVAL;
   }
 
-  // Ensure that we have ring buffers for this session
-  if (!have_ring_entries()) {
-    ERPC_WARN("%s: Ring buffers exhausted.\n", issue_msg);
-    return -ENOMEM;
-  }
+  // // Ensure that we have ring buffers for this session
+  // if (!have_ring_entries()) {
+  //   ERPC_WARN("%s: Ring buffers exhausted.\n", issue_msg);
+  //   return -ENOMEM;
+  // }
 
   auto *session = new Session(Session::Role::kClient, slow_rand_.next_u64(),
                               get_freq_ghz(), transport_->get_bandwidth());

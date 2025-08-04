@@ -342,6 +342,11 @@ class Rpc {
     return session->client_info_.num_re_tx_;
   }
 
+  size_t get_credits(int session_num) const {
+    Session *session = session_vec_[static_cast<size_t>(session_num)];
+    return session->client_info_.credits_;
+  }
+
   /// Reset the number of retransmissions for a connected session
   void reset_num_re_tx(int session_num) {
     Session *session = session_vec_[static_cast<size_t>(session_num)];

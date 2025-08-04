@@ -23,6 +23,9 @@ void Rpc<TTr>::enqueue_request(int session_num, uint8_t req_type,
   Session *session = session_vec_[static_cast<size_t>(session_num)];
   assert(session->is_connected());  // User is notified before we disconnect
 
+  if (session->client_info_.credits_ <= 0) {
+    return;
+  }
   // If a free sslot is unavailable, save to session backlog
   if (unlikely(session->client_info_.sslot_free_vec_.size() == 0)) {
     session->client_info_.enq_req_backlog_.emplace(session_num, req_type,
@@ -70,7 +73,7 @@ void Rpc<TTr>::enqueue_request(int session_num, uint8_t req_type,
   if (likely(session->client_info_.credits_ > 0)) {
     kick_req_st(&sslot);
   } else {
-    stallq_.push_back(&sslot);
+    // stallq_.push_back(&sslot);
   }
 }
 

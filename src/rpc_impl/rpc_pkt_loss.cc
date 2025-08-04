@@ -51,11 +51,11 @@ void Rpc<TTr>::pkt_loss_scan_st() {
       continue;
     }
 
-    // If the server hasn't failed, check for packet loss
-    if (ev_loop_tsc_ - cur->client_info_.progress_tsc_ > rpc_rto_cycles_) {
-      pkt_loss_retransmit_st(cur);
-      drain_tx_batch_and_dma_queue();
-    }
+    // // If the server hasn't failed, check for packet loss
+    // if (ev_loop_tsc_ - cur->client_info_.progress_tsc_ > rpc_rto_cycles_) {
+    //   pkt_loss_retransmit_st(cur);
+    //   drain_tx_batch_and_dma_queue();
+    // }
 
     cur = cur->client_info_.next_;
   }
