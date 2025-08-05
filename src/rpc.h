@@ -261,7 +261,7 @@ class Rpc {
    * continuation runs in the foreground. This argument is meant only for
    * internal use by eRPC (i.e., user calls must ignore it).
    */
-  void enqueue_request(int session_num, uint8_t req_type, MsgBuffer *req_msgbuf,
+  int enqueue_request(int session_num, uint8_t req_type, MsgBuffer *req_msgbuf,
                        MsgBuffer *resp_msgbuf, erpc_cont_func_t cont_func,
                        void *tag, size_t cont_etid = kInvalidBgETid);
 

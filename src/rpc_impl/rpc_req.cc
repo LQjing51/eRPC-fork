@@ -7,7 +7,7 @@ namespace erpc {
 // The cont_etid parameter is passed only when the event loop processes the
 // background threads' queue of enqueue_request calls.
 template <class TTr>
-void Rpc<TTr>::enqueue_request(int session_num, uint8_t req_type,
+int Rpc<TTr>::enqueue_request(int session_num, uint8_t req_type,
                                MsgBuffer *req_msgbuf, MsgBuffer *resp_msgbuf,
                                erpc_cont_func_t cont_func, void *tag,
                                size_t cont_etid) {
@@ -16,7 +16,7 @@ void Rpc<TTr>::enqueue_request(int session_num, uint8_t req_type,
     auto req_args = enq_req_args_t(session_num, req_type, req_msgbuf,
                                    resp_msgbuf, cont_func, tag, get_etid());
     bg_queues_.enqueue_request_.unlocked_push(req_args);
-    return;
+    return 1;
   }
 
   // If we're here, we're in the dispatch thread
@@ -24,14 +24,14 @@ void Rpc<TTr>::enqueue_request(int session_num, uint8_t req_type,
   assert(session->is_connected());  // User is notified before we disconnect
 
   if (session->client_info_.credits_ <= 0) {
-    return;
+    return 0;
   }
   // If a free sslot is unavailable, save to session backlog
   if (unlikely(session->client_info_.sslot_free_vec_.size() == 0)) {
     session->client_info_.enq_req_backlog_.emplace(session_num, req_type,
                                                    req_msgbuf, resp_msgbuf,
                                                    cont_func, tag, cont_etid);
-    return;
+    return 1;
   }
 
   // Fill in the sslot info
@@ -75,6 +75,7 @@ void Rpc<TTr>::enqueue_request(int session_num, uint8_t req_type,
   } else {
     // stallq_.push_back(&sslot);
   }
+  return 1;
 }
 
 template <class TTr>

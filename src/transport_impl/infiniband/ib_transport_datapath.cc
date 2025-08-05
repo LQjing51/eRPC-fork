@@ -67,9 +67,14 @@ void IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr,
 
   struct ibv_send_wr* bad_wr;
   int ret = ibv_post_send(qp, &send_wr[0], &bad_wr);
-  // int ret = RhyR::RhyR_client_post_send(qp, &send_wr[0], &bad_wr);
+  // int ret = RhyR::RhyR_client_post_send_v0(qp, &send_wr[0], &bad_wr);
+  // if (ret >= 0 && ret < num_pkts) { // Credits are not enough
+  //   // free failed posted buffers
+  //   // TBD
+  // }
   // int ret = RhyR::swift_post_send(qp, &send_wr[0], &bad_wr);
-  if (unlikely(ret != 0)) {
+  
+  if (unlikely(ret < 0)) {
     fprintf(stderr, "eRPC: Fatal error. ibv_post_send failed. ret = %d\n", ret);
     assert(ret == 0);
     exit(-1);
@@ -124,7 +129,7 @@ void IBTransport::tx_flush() {
 
 size_t IBTransport::rx_burst() {
   int ret = ibv_poll_cq(recv_cq, kPostlist, recv_wc);
-  // int ret = RhyR::RhyR_client_poll_recv_cq(recv_cq, kPostlist, recv_wc);
+  // int ret = RhyR::RhyR_client_poll_recv_cq_v0(recv_cq, kPostlist, recv_wc);
   // int ret = RhyR::swift_poll_recv_cq(recv_cq, kPostlist, recv_wc);
   assert(ret >= 0);
   return static_cast<size_t>(ret);

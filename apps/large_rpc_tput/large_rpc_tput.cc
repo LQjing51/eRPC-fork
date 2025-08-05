@@ -48,11 +48,10 @@ void send_req(AppContext *c, size_t msgbuf_idx, size_t req_size) {
   }
 
   c->req_ts[msgbuf_idx] = erpc::rdtsc();
-  c->rpc_->enqueue_request(c->session_num_vec_[0], kAppReqType, &req_msgbuf,
+  int ret = c->rpc_->enqueue_request(c->session_num_vec_[0], kAppReqType, &req_msgbuf,
                            &c->resp_msgbuf[msgbuf_idx], app_cont_func,
                            reinterpret_cast<void *>(msgbuf_idx));
-
-  c->stat_tx_bytes_tot += req_size;
+  if(ret) c->stat_tx_bytes_tot += req_size;
 }
 
   void add_ticks() {
