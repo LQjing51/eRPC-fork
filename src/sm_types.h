@@ -233,6 +233,7 @@ class SessionEndpoint {
 /// servers. This is pretty large (~500 bytes), so use sparingly.
 class SmPkt {
  public:
+  int32_t credits_;
   SmPktType pkt_type_;
   SmErrType err_type_;                ///< Error type, for responses only
   conn_req_uniq_token_t uniq_token_;  ///< The token for this session
@@ -241,7 +242,7 @@ class SmPkt {
   std::string to_string() const {
     std::ostringstream ret;
     if (pkt_type_ != SmPktType::kUnblock) {
-      ret << sm_pkt_type_str(pkt_type_) << ", " << sm_err_type_str(err_type_)
+      ret << "credits: " << credits_ << ", " << sm_pkt_type_str(pkt_type_) << ", " << sm_err_type_str(err_type_)
           << ", client: " << client_.name() << ", server: " << server_.name();
     } else {
       ret << sm_pkt_type_str(pkt_type_);

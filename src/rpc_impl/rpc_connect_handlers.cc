@@ -120,7 +120,7 @@ void Rpc<TTr>::handle_connect_req_st(const SmPkt &sm_pkt) {
   // Add server endpoint info created above to resp. No need to add client info.
   SmPkt resp_sm_pkt = sm_construct_resp(sm_pkt, SmErrType::kNoError);
   resp_sm_pkt.server_ = session->server_;
-
+  RhyR::RhyR_server_mark_credits(session->server_.session_num_, reinterpret_cast<char*>(&resp_sm_pkt), resp_sm_pkt.to_string().size());
   ERPC_INFO("%s: None. Sending response.\n", issue_msg);
   sm_pkt_udp_tx_st(resp_sm_pkt);
   return;
@@ -140,6 +140,8 @@ void Rpc<TTr>::handle_connect_resp_st(const SmPkt &sm_pkt) {
 
   uint16_t session_num = sm_pkt.client_.session_num_;
   assert(session_num < session_vec_.size());
+
+  RhyR::RhyR_client_read_credits(session_num, reinterpret_cast<const char*>(&sm_pkt), sm_pkt.to_string().size());
 
   // Handle reordering. We don't need the session token for this.
   Session *session = session_vec_[session_num];
