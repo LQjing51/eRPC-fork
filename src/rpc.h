@@ -456,7 +456,7 @@ class Rpc {
    */
   void fault_inject_set_pkt_drop_prob_st(double pkt_drop_prob);
 
- private:
+ public:
   int create_session_st(std::string remote_uri, uint8_t rem_rpc_id);
   int destroy_session_st(int session_num);
   size_t num_active_sessions_st();
@@ -668,8 +668,6 @@ class Rpc {
   /// Implementation of the run_event_loop(timeout) API function
   void run_event_loop_timeout_st(size_t timeout_ms);
 
-  void fake_process_resp(SSlot* sslot);
-
   /// Actually run one iteration of the event loop
   void run_event_loop_do_one_st();
 
@@ -738,6 +736,7 @@ class Rpc {
     item.routing_info_ = sslot->session_->remote_routing_info_;
     item.msg_buffer_ = const_cast<MsgBuffer *>(tx_msgbuf);
     item.pkt_idx_ = pkt_idx;
+    item.sslot_ = reinterpret_cast<uintptr_t>(sslot);
     if (kCcRTT) item.tx_ts_ = tx_ts;
 
     if (kTesting) {
@@ -974,7 +973,7 @@ class Rpc {
   /// happens when the server RPC thread has not started.
   bool retry_connect_on_invalid_rpc_id_ = false;
 
- private:
+ public:
   // Constructor args
   Nexus *nexus_;
   void *context_;  ///< The application context

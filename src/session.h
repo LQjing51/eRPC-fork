@@ -61,7 +61,7 @@ class Session {
  public:
   enum class Role : int { kServer, kClient };
 
- private:
+ public:
   Session(Role role, conn_req_uniq_token_t uniq_token, double freq_ghz,
           double link_bandwidth)
       : role_(role),

@@ -58,6 +58,7 @@ class Transport {
     size_t pkt_idx_;  /// Packet index (not pkt_num) in msg_buffer to transmit
     size_t* tx_ts_ = nullptr;  ///< TX timestamp, only for congestion control
     bool drop_;                ///< Drop this packet. Used only with kTesting.
+    uintptr_t sslot_;             ///< SSlot for this packet
   };
 
   /// Generic types for memory registration and deregistration functions.

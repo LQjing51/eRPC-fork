@@ -32,7 +32,7 @@ class SSlot {
   /// A non-preallocated msgbuf for possibly multi-packet responses
   MsgBuffer dyn_resp_msgbuf_;
 
- private:
+ public:
   // Members that are valid for both server and client
   Session *session_;  ///< Pointer to this sslot's session
 

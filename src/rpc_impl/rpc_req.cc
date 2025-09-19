@@ -24,6 +24,7 @@ int Rpc<TTr>::enqueue_request(int session_num, uint8_t req_type,
   assert(session->is_connected());  // User is notified before we disconnect
 
   if (session->client_info_.credits_ <= 0) {
+    printf("credits not enough\n");
     return 0;
   }
   // If a free sslot is unavailable, save to session backlog
@@ -31,13 +32,14 @@ int Rpc<TTr>::enqueue_request(int session_num, uint8_t req_type,
     session->client_info_.enq_req_backlog_.emplace(session_num, req_type,
                                                    req_msgbuf, resp_msgbuf,
                                                    cont_func, tag, cont_etid);
+    printf("enq_req_backlog\n");
     return 1;
   }
 
   // Fill in the sslot info
   size_t sslot_i = session->client_info_.sslot_free_vec_.pop_back();
   SSlot &sslot = session->sslot_arr_[sslot_i];
-  assert(sslot.tx_msgbuf_ == nullptr);  // Previous response was received
+  // assert(sslot.tx_msgbuf_ == nullptr);  // Previous response was received
   sslot.tx_msgbuf_ = req_msgbuf;        // Mark the request as active/incomplete
   sslot.cur_req_num_ += kSessionReqWindow;  // Move to next request
 
@@ -94,7 +96,7 @@ void Rpc<TTr>::process_small_req_st(SSlot *sslot, pkthdr_t *pkthdr) {
 
     if (pkthdr->req_num_ < sslot->cur_req_num_) {
       // This is a massively-delayed retransmission of an old request
-      ERPC_REORDER("%s: Dropping.\n", issue_msg);
+      printf("%s: Dropping.\n", issue_msg);
       return;
     } else {
       // This is a retransmission for the currently active request
@@ -105,14 +107,14 @@ void Rpc<TTr>::process_small_req_st(SSlot *sslot, pkthdr_t *pkthdr) {
         drain_tx_batch_and_dma_queue();
         return;
       } else {
-        ERPC_REORDER("%s: Response not available yet. Dropping.\n", issue_msg);
+        printf("%s: Response not available yet. Dropping.\n", issue_msg);
         return;
       }
     }
   }
 
   // If we're here, this is the first (and only) packet of this new request
-  assert(pkthdr->req_num_ == sslot->cur_req_num_ + kSessionReqWindow);
+  // assert(pkthdr->req_num_ == sslot->cur_req_num_ + kSessionReqWindow);
 
   auto &req_msgbuf = sslot->server_info_.req_msgbuf_;
   assert(req_msgbuf.is_buried());  // Buried on prev req's enqueue_response()

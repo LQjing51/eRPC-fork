@@ -1,6 +1,7 @@
 #ifdef ERPC_INFINIBAND
 
 #include "ib_transport.h"
+#include "sslot.h"
 
 namespace erpc {
 void IBTransport::tx_burst_for_arp(arp_hdr_t* req_hdr){
@@ -31,7 +32,8 @@ void IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr,
 
     if (item.pkt_idx_ == 0) {
       // This is the first packet, so we need only 1 SGE. This can be CR/RFR.
-      const pkthdr_t* pkthdr = msg_buffer->get_pkthdr_0();
+      pkthdr_t* pkthdr = msg_buffer->get_pkthdr_0();
+      memset(pkthdr, 0, kHeadroom + 2);
       sgl[0].addr = reinterpret_cast<uint64_t>(pkthdr);
       sgl[0].length = msg_buffer->get_pkt_size<kMaxDataPerPkt>(0);
       sgl[0].lkey = msg_buffer->buffer_.lkey_;
@@ -66,14 +68,27 @@ void IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr,
   send_wr[num_pkts - 1].next = nullptr;  // Breaker of chains, first of her name
 
   struct ibv_send_wr* bad_wr;
-  int ret = ibv_post_send(qp, &send_wr[0], &bad_wr);
-  // int ret = RhyR::RhyR_client_post_send_v0(qp, &send_wr[0], &bad_wr);
-  // if (ret >= 0 && ret < num_pkts) { // Credits are not enough
-  //   // free failed posted buffers
-  //   // TBD
+  // client
+  // int ret = ibv_post_send(qp, &send_wr[0], &bad_wr);
+  // if(ret == 0){
+  //   for(size_t i = 0; i < num_pkts; i++){
+  //     SSlot *sslot = reinterpret_cast<SSlot *>(tx_burst_arr[i].sslot_);
+  //     sslot->client_info_.num_tx_++;
+  //   }
   // }
-  // int ret = RhyR::swift_post_send(qp, &send_wr[0], &bad_wr);
-  
+  int ret = RhyR::swift_client_post_send(qp, &send_wr[0], &bad_wr);
+  if (ret >= 0) {
+    for (int i = 0; i < static_cast<int>(num_pkts); i++) {
+      SSlot *sslot = reinterpret_cast<SSlot *>(tx_burst_arr[i].sslot_);
+      if (i < ret) {
+        sslot->client_info_.num_tx_ = 1;
+      } else {
+        sslot->client_info_.num_tx_ = 2;
+      }
+    }
+  }
+  // server
+  // int ret = RhyR::swift_server_post_send(qp, &send_wr[0], &bad_wr);
   if (unlikely(ret < 0)) {
     fprintf(stderr, "eRPC: Fatal error. ibv_post_send failed. ret = %d\n", ret);
     assert(ret == 0);
@@ -128,9 +143,13 @@ void IBTransport::tx_flush() {
 }
 
 size_t IBTransport::rx_burst() {
-  int ret = ibv_poll_cq(recv_cq, kPostlist, recv_wc);
+  // int ret = ibv_poll_cq(recv_cq, kPostlist, recv_wc);
+  // client
   // int ret = RhyR::RhyR_client_poll_recv_cq_v0(recv_cq, kPostlist, recv_wc);
-  // int ret = RhyR::swift_poll_recv_cq(recv_cq, kPostlist, recv_wc);
+  int ret = RhyR::swift_client_poll_recv_cq(recv_cq, kPostlist, recv_wc);
+  // server
+  // int ret = RhyR::RhyR_server_poll_recv_cq(recv_cq, kPostlist, recv_wc);
+  // int ret = RhyR::swift_server_poll_recv_cq(recv_cq, kPostlist, recv_wc);
   assert(ret >= 0);
   return static_cast<size_t>(ret);
 }
@@ -152,7 +171,6 @@ void IBTransport::post_recvs(size_t num_recvs) {
 
     struct ibv_recv_wr* bad_wr = &special_wr;
     int ret = ibv_post_recv(qp, nullptr, &bad_wr);
-    // int ret = RhyR::RhyR_client_post_recv(qp, nullptr, &bad_wr);
     if (unlikely(ret != 0)) {
       fprintf(stderr, "eRPC IBTransport: Post RECV (fast) error %d\n", ret);
       exit(-1);
@@ -177,7 +195,8 @@ void IBTransport::post_recvs(size_t num_recvs) {
 
   last_wr->next = nullptr;  // Breaker of chains, queen of the First Men
 
-  ret = ibv_post_recv(qp, first_wr, &bad_wr);
+  // ret = ibv_post_recv(qp, first_wr, &bad_wr);
+  ret = RhyR::swift_client_post_recv(qp, first_wr, &bad_wr);
   if (unlikely(ret != 0)) {
     fprintf(stderr, "eRPC IBTransport: Post RECV (normal) error %d\n", ret);
     exit(-1);

@@ -4,7 +4,7 @@
  */
 #include "client_tests.h"
 
-static constexpr size_t kTestNumReqs = 1000;
+static constexpr size_t kTestNumReqs = 10000;
 static_assert(kTestNumReqs > kSessionReqWindow, "");
 static_assert(kTestNumReqs < std::numeric_limits<uint16_t>::max(), "");
 

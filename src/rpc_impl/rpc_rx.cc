@@ -39,7 +39,7 @@ void Rpc<TTr>::process_comps_st() {
       if(ntohs(eth_hdr->eth_type_) == ETH_P_ARP){
         handle_arp_packet(hdr);
       }else{
-        ERPC_INFO(
+        printf(
             "Rpc %u: Received %s with invalid magic. Packet headroom = %s. "
             "Dropping.\n",
             rpc_id_, pkthdr->to_string().c_str(),
@@ -51,7 +51,7 @@ void Rpc<TTr>::process_comps_st() {
     assert(pkthdr->msg_size_ <= kMaxMsgSize);  // msg_size can be 0 here
 
     if (unlikely(pkthdr->dest_session_num_ >= session_vec_.size())) {
-      ERPC_WARN(
+      printf(
           "Rpc %u: Received %s for a session yet to be connected. Dropping.\n",
           rpc_id_, pkthdr->to_string().c_str());
       continue;
@@ -59,13 +59,13 @@ void Rpc<TTr>::process_comps_st() {
 
     Session *session = session_vec_[pkthdr->dest_session_num_];
     if (unlikely(session == nullptr)) {
-      ERPC_WARN("Rpc %u: Received %s for buried session. Dropping.\n", rpc_id_,
+      printf("Rpc %u: Received %s for buried session. Dropping.\n", rpc_id_,
                 pkthdr->to_string().c_str());
       continue;
     }
 
     if (unlikely(!session->is_connected())) {
-      ERPC_WARN(
+      printf(
           "Rpc %u: Received %s for unconnected session (state %s). Dropping.\n",
           rpc_id_, pkthdr->to_string().c_str(),
           session_state_str(session->state_).c_str());

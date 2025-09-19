@@ -34,6 +34,8 @@ std::function<void(AppContext *)> connect_sessions_func = nullptr;
 
 // Global variable to track the next msgbuf index to use
 std::vector<size_t> loop_msgbuf_idx_vec(16, 0);
+size_t check_interval_;
+size_t check_tsc_;
 
 void app_cont_func(void *, void *);  // Forward declaration
 
@@ -65,11 +67,6 @@ void send_req(AppContext *c, size_t msgbuf_idx, size_t req_size) {
 void req_handler(erpc::ReqHandle *req_handle, void *_context) {
   auto *c = static_cast<AppContext *>(_context);
   const erpc::MsgBuffer *req_msgbuf = req_handle->get_req_msgbuf();
-  #ifdef KeepSend
-  size_t cur_size = req_msgbuf->get_data_size();
-  c->stat_rx_bytes_tot += cur_size;
-  #else
-
   uint8_t resp_byte = req_msgbuf->buf_[0];
 
   size_t req_size = req_msgbuf->get_data_size();
@@ -103,13 +100,25 @@ void req_handler(erpc::ReqHandle *req_handle, void *_context) {
   add_ticks();
 
   c->rpc_->enqueue_response(req_handle, &resp_msgbuf);
-  #endif
+}
+
+void retrans_carc_stall(AppContext *c){
+    erpc::Session *session = c->rpc_->session_vec_[0];
+    for(size_t i = 0; i < erpc::kSessionReqWindow; i++){
+      erpc::SSlot &sslot = session->sslot_arr_[i];
+      if(sslot.tx_msgbuf_ != nullptr){
+        if (sslot.client_info_.num_tx_ == 2){
+          session->client_info_.credits_+= 1;
+          session->client_info_.sslot_free_vec_.push_back(sslot.index_);
+          send_req(c,reinterpret_cast<size_t>(sslot.client_info_.tag_), sslot.tx_msgbuf_->get_data_size());
+        }
+      }
+    }
 }
 
 void app_cont_func(void *_context, void *_tag) {
   auto *c = static_cast<AppContext *>(_context);
   auto msgbuf_idx = reinterpret_cast<size_t>(_tag);
-  #ifndef KeepSend
   const erpc::MsgBuffer &resp_msgbuf = c->resp_msgbuf[msgbuf_idx];
   if (kAppVerbose) {
     printf("large_rpc_tput: Received response for msgbuf %zu.\n", msgbuf_idx);
@@ -135,20 +144,28 @@ void app_cont_func(void *_context, void *_tag) {
   }
 
   c->stat_rx_bytes_tot += resp_size;
-  #endif
 
-  size_t req_size = c->req_msgbuf[msgbuf_idx].get_data_size();
+  // choose msg idx in loop or use resp idx.
+  size_t buf_idx;
+  // size_t* idx = &(loop_msgbuf_idx_vec[c->thread_id_]);
+  // buf_idx = *idx;
+  // *idx = (*idx + 1) % kAppMaxConcurrency;
+  buf_idx = msgbuf_idx;
 
-  size_t* idx = &(loop_msgbuf_idx_vec[c->thread_id_]);
-  // Create a new request clocking this response, and put in request queue
+  size_t req_size = c->req_msgbuf[buf_idx].get_data_size();
   if (kAppClientMemsetReq) {
-    memset(c->req_msgbuf[*idx].buf_, kAppDataByte, req_size);
+    memset(c->req_msgbuf[buf_idx].buf_, kAppDataByte, req_size);
   } else {
-    c->req_msgbuf[*idx].buf_[0] = kAppDataByte;
+    c->req_msgbuf[buf_idx].buf_[0] = kAppDataByte;
   }
+  send_req(c, buf_idx, req_size);
 
-  send_req(c, *idx, req_size);
-  *idx = (*idx + 1) % kAppMaxConcurrency;
+  // check carc stall and retansmit
+  if (erpc::rdtsc() - check_tsc_ > check_interval_){
+    retrans_carc_stall(c);
+    check_tsc_ = erpc::rdtsc();
+  } 
+
 }
 
 // The function executed by each thread in the cluster
@@ -202,6 +219,8 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
       send_req(&c, msgbuf_idx, req_size);
     }
   }
+  check_interval_ = erpc::ms_to_cycles(100, rpc.get_freq_ghz());
+  check_tsc_ = erpc::rdtsc();
 
   c.tput_t0.reset();
   for (size_t i = 0; i < FLAGS_test_ms; i += kAppEvLoopMs) {
@@ -237,8 +256,8 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
         "Gbps (IOPS). Retransmissions %zu. Packet RTTs: {%.1f, %.1f} us. "
         "RPC latency {%.1f 50th, %.1f 99th, %.1f 99.9th}. Timely rate %.1f "
         "Gbps. Credits %zu (best = 32).\n",
-        c.thread_id_, stats.rx_gbps, c.stat_rx_bytes_tot / resp_size,
-        stats.tx_gbps, c.stat_tx_bytes_tot / req_size, stats.re_tx,
+        c.thread_id_, stats.rx_gbps*(resp_size+126)/resp_size, c.stat_rx_bytes_tot / resp_size,
+        stats.rx_gbps*(req_size+126)/resp_size, c.stat_rx_bytes_tot / resp_size, stats.re_tx,
         stats.rtt_50_us, stats.rtt_99_us, stats.rpc_50_us, stats.rpc_99_us,
         stats.rpc_999_us, timely_0->get_rate_gbps(), c.rpc_->get_credits(c.session_num_vec_[0]));
 

@@ -20,8 +20,7 @@ void Rpc<TTr>::kick_req_st(SSlot *sslot) {
     } else {
       enqueue_wheel_req_st(sslot, ci.num_tx_);
     }
-
-    ci.num_tx_++;
+    // ci.num_tx_++;
     credits--;
   }
 }

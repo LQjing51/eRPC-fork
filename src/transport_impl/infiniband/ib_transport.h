@@ -115,7 +115,9 @@ class IBTransport : public Transport {
     bool signaled;
     if (nb_tx % kUnsigBatch == 0) {
       signaled = true;
-      if (likely(nb_tx != 0)) poll_cq_one_helper(send_cq);
+      struct ibv_wc wc;
+      ibv_poll_cq(send_cq, 1, &wc);
+      // if (likely(nb_tx != 0)) poll_cq_one_helper(send_cq);
     } else {
       signaled = false;
     }

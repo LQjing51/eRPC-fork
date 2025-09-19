@@ -79,11 +79,12 @@ void Rpc<TTr>::process_resp_one_st(SSlot *sslot, const pkthdr_t *pkthdr,
   if (unlikely(!in_order_client(sslot, pkthdr))) {
     ERPC_REORDER(
         "Rpc %u, lsn %u (%s): Received out-of-order response. "
-        "Packet %zu/%zu, sslot %zu/%s. Dropping.\n",
+        "Packet %ld/%d, sslot %zu/%s. Dropping.\n",
         rpc_id_, sslot->session_->local_session_num_,
         sslot->session_->get_remote_hostname().c_str(), pkthdr->req_num_,
         pkthdr->pkt_num_, sslot->cur_req_num_, sslot->progress_str().c_str());
-    return;
+    // receive reorder resp, but not drop it
+    // return;
   }
 
   auto &ci = sslot->client_info_;
@@ -118,8 +119,10 @@ void Rpc<TTr>::process_resp_one_st(SSlot *sslot, const pkthdr_t *pkthdr,
     }
 
     // Transmit remaining RFRs before response memcpy. We have credits.
-    if (ci.num_tx_ != wire_pkts(req_msgbuf, resp_msgbuf)) kick_rfr_st(sslot);
-
+    if (ci.num_tx_ != wire_pkts(req_msgbuf, resp_msgbuf)) {
+      kick_rfr_st(sslot);
+      printf("kick_rfr_st\n");
+    }
     // Hdr 0 was copied earlier, other headers are unneeded, so copy just data.
     const size_t pkt_idx = resp_ntoi(pkthdr->pkt_num_, req_msgbuf->num_pkts_);
     copy_data_to_msgbuf(resp_msgbuf, pkt_idx, pkthdr);
@@ -159,6 +162,7 @@ void Rpc<TTr>::process_resp_one_st(SSlot *sslot, const pkthdr_t *pkthdr,
                     args.resp_msgbuf_, args.cont_func_, args.tag_,
                     args.cont_etid_);
     session->client_info_.enq_req_backlog_.pop();
+    printf("clear up one request from the backlog\n");
   }
 
   if (likely(cont_etid == kInvalidBgETid)) {

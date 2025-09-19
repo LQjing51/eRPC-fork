@@ -23,7 +23,7 @@ static constexpr size_t kTestRpcId = 0;  // ID of the fixture's Rpc
 static constexpr size_t kTestReqType = 1;
 static constexpr void *kTestTag = nullptr;
 static constexpr size_t kTestSmallMsgSize = 32;
-static constexpr size_t kTestLargeMsgSize = KB(128);
+static constexpr size_t kTestLargeMsgSize = KB(1280000);
 static constexpr double kTestLinkBandwidth = 56.0 * 1000 * 1000 * 1000 / 8;
 
 static void req_handler(ReqHandle *, void *);  // Defined in each test.cc

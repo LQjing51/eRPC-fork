@@ -11,7 +11,7 @@
 bool primary_bg, backup_bg;
 
 static constexpr uint8_t kTestDataByte = 10;
-static constexpr size_t kTestNumReqs = 33;
+static constexpr size_t kTestNumReqs = 33000;
 static_assert(kTestNumReqs > kSessionReqWindow, "");
 
 /// Request type used for client to primary
