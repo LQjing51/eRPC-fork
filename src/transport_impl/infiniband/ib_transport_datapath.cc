@@ -67,8 +67,8 @@ void IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr,
 
   send_wr[num_pkts - 1].next = nullptr;  // Breaker of chains, first of her name
 
-  struct ibv_send_wr* bad_wr;
-  // client
+  struct ibv_send_wr* bad_wr = nullptr;
+  // origin
   // int ret = ibv_post_send(qp, &send_wr[0], &bad_wr);
   // if(ret == 0){
   //   for(size_t i = 0; i < num_pkts; i++){
@@ -76,31 +76,37 @@ void IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr,
   //     sslot->client_info_.num_tx_++;
   //   }
   // }
-  int ret = RhyR::swift_client_post_send(qp, &send_wr[0], &bad_wr);
-  if (ret >= 0) {
-    for (int i = 0; i < static_cast<int>(num_pkts); i++) {
-      SSlot *sslot = reinterpret_cast<SSlot *>(tx_burst_arr[i].sslot_);
-      if (i < ret) {
-        sslot->client_info_.num_tx_ = 1;
-      } else {
-        sslot->client_info_.num_tx_ = 2;
-      }
+  // if (unlikely(ret != 0)) {
+  //   fprintf(stderr, "eRPC: Fatal error. ibv_post_send failed. ret = %d\n", ret);
+  //   assert(ret == 0);
+  //   exit(-1);
+  // }
+  // client
+  RhyR::swift_client_post_send(qp, &send_wr[0], &bad_wr);
+  bool after_bad_wr = false;
+  for (int i = 0; i < static_cast<int>(num_pkts); i++) {
+    struct ibv_send_wr* wr = &send_wr[i];
+    SSlot *sslot = reinterpret_cast<SSlot *>(tx_burst_arr[i].sslot_);
+    if (wr == bad_wr || after_bad_wr) {
+      sslot->client_info_.num_tx_ = 2;
+      after_bad_wr = true;
+    } else {
+      sslot->client_info_.num_tx_ = 1;
     }
   }
   // server
   // int ret = RhyR::swift_server_post_send(qp, &send_wr[0], &bad_wr);
-  if (unlikely(ret < 0)) {
-    fprintf(stderr, "eRPC: Fatal error. ibv_post_send failed. ret = %d\n", ret);
-    assert(ret == 0);
-    exit(-1);
-  }
-
+  // if (unlikely(ret != 0)) {
+  //   fprintf(stderr, "eRPC: Fatal error. ibv_post_send failed. ret = %d\n", ret);
+  //   assert(ret == 0);
+  //   exit(-1);
+  // }
   send_wr[num_pkts - 1].next = &send_wr[num_pkts];  // Restore chain; safe
 }
 
 void IBTransport::tx_flush() {
   if (unlikely(nb_tx == 0)) return;
-
+  printf("we are in tx_flush\n");
   // If we are here, we have sent a packet. The selective signaling logic
   // guarantees that there is *exactly one* *signaled* SEND work request.
   poll_cq_one_helper(send_cq);  // Poll the one existing signaled WQE
@@ -143,6 +149,7 @@ void IBTransport::tx_flush() {
 }
 
 size_t IBTransport::rx_burst() {
+  // origin
   // int ret = ibv_poll_cq(recv_cq, kPostlist, recv_wc);
   // client
   // int ret = RhyR::RhyR_client_poll_recv_cq_v0(recv_cq, kPostlist, recv_wc);

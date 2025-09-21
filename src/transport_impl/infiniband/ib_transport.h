@@ -24,7 +24,7 @@ class IBTransport : public Transport {
 
   static constexpr size_t kRecvSize = (kMTU + 64);  ///< RECV size (with GRH)
   static constexpr size_t kRQDepth = kNumRxRingEntries;  ///< RECV queue depth
-  static constexpr size_t kSQDepth = 128;                ///< Send queue depth
+  static constexpr size_t kSQDepth = 4096;                ///< Send queue depth
   static constexpr size_t kUnsigBatch = 64;  ///< Selective signaling for SENDs
   static constexpr size_t kPostlist = 16;    ///< Maximum SEND postlist
   static constexpr size_t kMaxInline = 60;   ///< Maximum send wr inline data
