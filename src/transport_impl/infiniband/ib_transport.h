@@ -11,11 +11,6 @@
 #include "util/logger.h"
 #include "rhyr.h"
 
-#define UD 0
-#define RC 1
-
-#define RoCE_TYPE RC
-
 namespace erpc {
 
 class IBTransport : public Transport {
@@ -131,7 +126,7 @@ class IBTransport : public Transport {
     return signaled;
   }
 
- public:
+ private:
   /**
    * @brief Resolve InfiniBand-specific fields in \p resolve
    * @throw runtime_error if the port cannot be resolved
@@ -144,7 +139,7 @@ class IBTransport : public Transport {
    *
    * @throw runtime_error if initialization fails
    */
-  void init_verbs_structs(ib_routing_info_t* rinfo);
+  void init_verbs_structs();
 
   /// Initialize the memory registration and deregistration functions
   void init_mem_reg_funcs();
