@@ -30,6 +30,8 @@ void connect_sessions_func_incast(AppContext *c) {
     c->rpc_->run_event_loop(200);  // 200 milliseconds
     if (ctrl_c_pressed == 1) return;
   }
+  erpc::IBTransport::ib_routing_info_t* rinfo = c->rpc_->session_vec_[0]->is_client() ? reinterpret_cast<erpc::IBTransport::ib_routing_info_t*>(&c->rpc_->session_vec_[0]->server_.routing_info_) : reinterpret_cast<erpc::IBTransport::ib_routing_info_t*>(&c->rpc_->session_vec_[0]->client_.routing_info_);
+  c->rpc_->transport_->init_verbs_structs(rinfo);
 
   if (FLAGS_throttle == 1) {
     erpc::Timely *timely_0 = c->rpc_->get_timely(c->session_num_vec_[0]);

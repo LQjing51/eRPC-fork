@@ -5,6 +5,7 @@
 
 #include "ib_transport.h"
 #include "util/huge_alloc.h"
+#include "rpc.h"
 
 namespace erpc {
 
@@ -34,7 +35,7 @@ IBTransport::IBTransport(uint16_t sm_udp_port, uint8_t rpc_id, uint8_t phy_port,
   common_resolve_phy_port(phy_port, kMTU, kTransportType, resolve);
   ib_resolve_phy_port();
 
-  init_verbs_structs();
+  // init_verbs_structs();
   init_mem_reg_funcs();
 
   ERPC_INFO("IBTransport created for ID %u. Device %s, port %d.\n", rpc_id,
@@ -133,7 +134,7 @@ void IBTransport::ib_resolve_phy_port() {
   }
 }
 
-void IBTransport::init_verbs_structs() {
+void IBTransport::init_verbs_structs(ib_routing_info_t* rinfo) {
   assert(resolve.ib_ctx != nullptr && resolve.device_id != -1);
 
   // Create protection domain, send CQ, and recv CQ
@@ -152,8 +153,10 @@ void IBTransport::init_verbs_structs() {
   create_attr.send_cq = send_cq;
   create_attr.recv_cq = recv_cq;
   #if RoCE_TYPE == UD
+    printf("create ud qp\n");
     create_attr.qp_type = IBV_QPT_UD;
   #elif RoCE_TYPE == RC
+    printf("create rc qp\n");
     create_attr.qp_type = IBV_QPT_RC;
   #endif
 
@@ -204,9 +207,11 @@ void IBTransport::init_verbs_structs() {
         rtr_attr.path_mtu = IBV_MTU_4096;
         break;
       default:
-        DPERF_ERROR("Invalid MTU when setting RDMA QP's RTR state: %zu\n", kMTU);
+        throw std::runtime_error("Invalid MTU when setting RDMA QP's RTR state: " + std::to_string(kMTU));
     }
-    rtr_attr.dest_qp_num = remote_qp_info.qp_num;
+    // erpc::Session *session = rpc->session_vec_[0];
+    // ib_routing_info_t* rinfo = session->is_client() ? reinterpret_cast<ib_routing_info_t*>(&session->server_.routing_info_) : reinterpret_cast<ib_routing_info_t*>(&session->client_.routing_info_);
+    rtr_attr.dest_qp_num = rinfo->qpn;
     rtr_attr.rq_psn = 0;
     rtr_attr.max_dest_rd_atomic = 1;
     rtr_attr.min_rnr_timer = 12;
@@ -214,8 +219,8 @@ void IBTransport::init_verbs_structs() {
     rtr_attr.ah_attr.sl = 0;
     rtr_attr.ah_attr.src_path_bits = 0;
     rtr_attr.ah_attr.port_num = 1;
-    rtr_attr.ah_attr.dlid = remote_qp_info.lid;
-    memcpy(&rtr_attr.ah_attr.grh.dgid, remote_qp_info.gid, 16);
+    rtr_attr.ah_attr.dlid = rinfo->port_lid;
+    memcpy(&rtr_attr.ah_attr.grh.dgid, &(rinfo->gid), 16);
     rtr_attr.ah_attr.is_global = 1;
     rtr_attr.ah_attr.grh.sgid_index = kDefaultGIDIndex;
     rtr_attr.ah_attr.grh.hop_limit = 2;
@@ -302,11 +307,11 @@ void IBTransport::init_recvs(uint8_t **rx_ring) {
     // (64 - kGRHBytes) bytes. Each slot is still large enough to receive the
     // GRH and kMTU payload bytes.
     #if RoCE_TYPE == UD
-    // Each chunk is a mbuf, and the first 64 Bytes are for GRH
-    const size_t offset = (i * kRecvSize) + (64 - kGRHBytes);
-    assert(offset + (kGRHBytes + kMTU) <= ring_extent_size);
+      // Each chunk is a mbuf, and the first 64 Bytes are for GRH
+      const size_t offset = (i * kRecvSize) + (64 - kGRHBytes);
+      assert(offset + (kGRHBytes + kMTU) <= ring_extent_size);
     #elif RoCE_TYPE == RC
-      const size_t offset = (i * kMbufSize);
+      const size_t offset = (i * kRecvSize);
       assert(offset + kMTU <= ring_extent_size);
     #endif
 
