@@ -60,7 +60,7 @@ int Rpc<TTr>::create_session_st(std::string remote_uri, uint8_t rem_rpc_id) {
   client_endpoint.sm_udp_port_ = nexus_->sm_udp_port_;
   client_endpoint.rpc_id_ = rpc_id_;
   client_endpoint.session_num_ = session->local_session_num_;
-  // transport_->fill_local_routing_info(&client_endpoint.routing_info_);
+  transport_->fill_local_routing_info(&client_endpoint.routing_info_);
 
   SessionEndpoint &server_endpoint = session->server_;
   server_endpoint.transport_type_ = transport_->transport_type_;
