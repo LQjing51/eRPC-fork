@@ -59,7 +59,7 @@ Rpc<TTr>::Rpc(Nexus *nexus, void *context, uint8_t rpc_id,
                     transport_->dereg_mr_func_);
 
   // Complete transport initialization using the hugepage allocator
-  transport_->init_hugepage_structures(huge_alloc_, rx_ring_);
+  // transport_->init_hugepage_structures(huge_alloc_, rx_ring_);
 
   wheel_ = nullptr;
   if (kCcPacing) {
@@ -71,15 +71,15 @@ Rpc<TTr>::Rpc(Nexus *nexus, void *context, uint8_t rpc_id,
   }
 
   // Create DMA-registered msgbufs for control packets
-  for (MsgBuffer &ctrl_msgbuf : ctrl_msgbufs_) {
-    ctrl_msgbuf = alloc_msg_buffer(8);  // alloc_msg_buffer() requires size > 0
-    if (ctrl_msgbuf.buf_ == nullptr) {
-      delete huge_alloc_;
-      throw std::runtime_error(
-          std::string("Failed to allocate control msgbufs. ") +
-          HugeAlloc::kAllocFailHelpStr);
-    }
-  }
+  // for (MsgBuffer &ctrl_msgbuf : ctrl_msgbufs_) {
+  //   ctrl_msgbuf = alloc_msg_buffer(8);  // alloc_msg_buffer() requires size > 0
+  //   if (ctrl_msgbuf.buf_ == nullptr) {
+  //     delete huge_alloc_;
+  //     throw std::runtime_error(
+  //         std::string("Failed to allocate control msgbufs. ") +
+  //         HugeAlloc::kAllocFailHelpStr);
+  //   }
+  // }
 
   // Register the hook with the Nexus. This installs SM and bg command queues.
   nexus_hook_.rpc_id_ = rpc_id;

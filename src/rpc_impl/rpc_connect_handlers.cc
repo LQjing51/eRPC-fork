@@ -103,7 +103,7 @@ void Rpc<TTr>::handle_connect_req_st(const SmPkt &sm_pkt) {
   // Fill-in the server endpoint
   session->server_ = sm_pkt.server_;
   session->server_.session_num_ = session_vec_.size();
-  transport_->fill_local_routing_info(&session->server_.routing_info_);
+  // transport_->fill_local_routing_info(&session->server_.routing_info_);
   conn_req_token_map_[session->uniq_token_] = session->server_.session_num_;
 
   // Fill-in the client endpoint
