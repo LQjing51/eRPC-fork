@@ -69,31 +69,31 @@ void IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr,
 
   struct ibv_send_wr* bad_wr = nullptr;
   // origin
-  // int ret = ibv_post_send(qp, &send_wr[0], &bad_wr);
+  int ret = ibv_post_send(qp, &send_wr[0], &bad_wr);
   // if(ret == 0){
   //   for(size_t i = 0; i < num_pkts; i++){
   //     SSlot *sslot = reinterpret_cast<SSlot *>(tx_burst_arr[i].sslot_);
   //     sslot->client_info_.num_tx_++;
   //   }
   // }
-  // if (unlikely(ret != 0)) {
-  //   fprintf(stderr, "eRPC: Fatal error. ibv_post_send failed. ret = %d\n", ret);
-  //   assert(ret == 0);
-  //   exit(-1);
-  // }
-  // client
-  RhyR::swift_client_post_send(qp, &send_wr[0], &bad_wr);
-  bool after_bad_wr = false;
-  for (int i = 0; i < static_cast<int>(num_pkts); i++) {
-    struct ibv_send_wr* wr = &send_wr[i];
-    SSlot *sslot = reinterpret_cast<SSlot *>(tx_burst_arr[i].sslot_);
-    if (wr == bad_wr || after_bad_wr) {
-      sslot->client_info_.num_tx_ = 2;
-      after_bad_wr = true;
-    } else {
-      sslot->client_info_.num_tx_ = 1;
-    }
+  if (unlikely(ret != 0)) {
+    fprintf(stderr, "eRPC: Fatal error. ibv_post_send failed. ret = %d\n", ret);
+    assert(ret == 0);
+    exit(-1);
   }
+  // client
+  // RhyR::swift_client_post_send(qp, &send_wr[0], &bad_wr);
+  // bool after_bad_wr = false;
+  // for (int i = 0; i < static_cast<int>(num_pkts); i++) {
+  //   struct ibv_send_wr* wr = &send_wr[i];
+  //   SSlot *sslot = reinterpret_cast<SSlot *>(tx_burst_arr[i].sslot_);
+  //   if (wr == bad_wr || after_bad_wr) {
+  //     sslot->client_info_.num_tx_ = 2;
+  //     after_bad_wr = true;
+  //   } else {
+  //     sslot->client_info_.num_tx_ = 1;
+  //   }
+  // }
   // server
   // int ret = RhyR::swift_server_post_send(qp, &send_wr[0], &bad_wr);
   // if (unlikely(ret != 0)) {
@@ -150,10 +150,10 @@ void IBTransport::tx_flush() {
 
 size_t IBTransport::rx_burst() {
   // origin
-  // int ret = ibv_poll_cq(recv_cq, kPostlist, recv_wc);
+  int ret = ibv_poll_cq(recv_cq, kPostlist, recv_wc);
   // client
   // int ret = RhyR::RhyR_client_poll_recv_cq_v0(recv_cq, kPostlist, recv_wc);
-  int ret = RhyR::swift_client_poll_recv_cq(recv_cq, kPostlist, recv_wc);
+  // int ret = RhyR::swift_client_poll_recv_cq(recv_cq, kPostlist, recv_wc);
   // server
   // int ret = RhyR::RhyR_server_poll_recv_cq(recv_cq, kPostlist, recv_wc);
   // int ret = RhyR::swift_server_poll_recv_cq(recv_cq, kPostlist, recv_wc);
@@ -202,8 +202,8 @@ void IBTransport::post_recvs(size_t num_recvs) {
 
   last_wr->next = nullptr;  // Breaker of chains, queen of the First Men
 
-  // ret = ibv_post_recv(qp, first_wr, &bad_wr);
-  ret = RhyR::swift_client_post_recv(qp, first_wr, &bad_wr);
+  ret = ibv_post_recv(qp, first_wr, &bad_wr);
+  // ret = RhyR::swift_client_post_recv(qp, first_wr, &bad_wr);
   if (unlikely(ret != 0)) {
     fprintf(stderr, "eRPC IBTransport: Post RECV (normal) error %d\n", ret);
     exit(-1);

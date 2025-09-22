@@ -161,10 +161,10 @@ void app_cont_func(void *_context, void *_tag) {
   send_req(c, buf_idx, req_size);
 
   // check carc stall and retansmit
-  if (erpc::rdtsc() - check_tsc_ > check_interval_){
-    retrans_carc_stall(c);
-    check_tsc_ = erpc::rdtsc();
-  } 
+  // if (erpc::rdtsc() - check_tsc_ > check_interval_){
+  //   retrans_carc_stall(c);
+  //   check_tsc_ = erpc::rdtsc();
+  // } 
 
 }
 
@@ -219,7 +219,7 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
       send_req(&c, msgbuf_idx, req_size);
     }
   }
-  check_interval_ = erpc::ms_to_cycles(1000, rpc.get_freq_ghz());
+  check_interval_ = erpc::ms_to_cycles(100, rpc.get_freq_ghz());
   check_tsc_ = erpc::rdtsc();
 
   c.tput_t0.reset();
