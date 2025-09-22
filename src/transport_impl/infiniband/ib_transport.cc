@@ -151,7 +151,11 @@ void IBTransport::init_verbs_structs() {
   memset(static_cast<void *>(&create_attr), 0, sizeof(struct ibv_qp_init_attr));
   create_attr.send_cq = send_cq;
   create_attr.recv_cq = recv_cq;
-  create_attr.qp_type = IBV_QPT_UD;
+  #if RoCE_TYPE == UD
+    create_attr.qp_type = IBV_QPT_UD;
+  #elif RoCE_TYPE == RC
+    create_attr.qp_type = IBV_QPT_RC;
+  #endif
 
   create_attr.cap.max_send_wr = kSQDepth;
   create_attr.cap.max_recv_wr = kRQDepth;
@@ -168,9 +172,14 @@ void IBTransport::init_verbs_structs() {
   init_attr.qp_state = IBV_QPS_INIT;
   init_attr.pkey_index = 0;
   init_attr.port_num = static_cast<uint8_t>(resolve.dev_port_id);
-  init_attr.qkey = kQKey;
+  #if RoCE_TYPE == UD
+    init_attr.qkey = kQKey;
+    int attr_mask = IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_QKEY;
+  #elif RoCE_TYPE == RC
+    init_attr.qp_access_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_ATOMIC;
+    int attr_mask = IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
+  #endif
 
-  int attr_mask = IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_QKEY;
   if (ibv_modify_qp(qp, &init_attr, attr_mask) != 0) {
     throw std::runtime_error("Failed to modify QP to init");
   }
@@ -179,10 +188,47 @@ void IBTransport::init_verbs_structs() {
   struct ibv_qp_attr rtr_attr;
   memset(static_cast<void *>(&rtr_attr), 0, sizeof(struct ibv_qp_attr));
   rtr_attr.qp_state = IBV_QPS_RTR;
+  #if RoCE_TYPE == UD
+    if (ibv_modify_qp(qp, &rtr_attr, IBV_QP_STATE)) {
+      throw std::runtime_error("Failed to modify QP to RTR");
+    }
+  #elif RoCE_TYPE == RC
+    switch (kMTU) {
+      case 1024:
+        rtr_attr.path_mtu = IBV_MTU_1024;
+        break;
+      case 2048:
+        rtr_attr.path_mtu = IBV_MTU_2048;
+        break;
+      case 4096:
+        rtr_attr.path_mtu = IBV_MTU_4096;
+        break;
+      default:
+        DPERF_ERROR("Invalid MTU when setting RDMA QP's RTR state: %zu\n", kMTU);
+    }
+    rtr_attr.dest_qp_num = remote_qp_info.qp_num;
+    rtr_attr.rq_psn = 0;
+    rtr_attr.max_dest_rd_atomic = 1;
+    rtr_attr.min_rnr_timer = 12;
 
-  if (ibv_modify_qp(qp, &rtr_attr, IBV_QP_STATE)) {
-    throw std::runtime_error("Failed to modify QP to RTR");
-  }
+    rtr_attr.ah_attr.sl = 0;
+    rtr_attr.ah_attr.src_path_bits = 0;
+    rtr_attr.ah_attr.port_num = 1;
+    rtr_attr.ah_attr.dlid = remote_qp_info.lid;
+    memcpy(&rtr_attr.ah_attr.grh.dgid, remote_qp_info.gid, 16);
+    rtr_attr.ah_attr.is_global = 1;
+    rtr_attr.ah_attr.grh.sgid_index = kDefaultGIDIndex;
+    rtr_attr.ah_attr.grh.hop_limit = 2;
+    rtr_attr.ah_attr.grh.traffic_class = 0;
+
+    if (ibv_modify_qp(qp, &rtr_attr,
+                      IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU |
+                          IBV_QP_DEST_QPN | IBV_QP_RQ_PSN |
+                          IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER)) {
+      throw std::runtime_error("Failed to modify QP to RTR "+std::string(strerror(errno)));
+    }
+  #endif
+
 
   // Create self address handle. We use local routing info for convenience,
   // so this must be done after creating the QP.
@@ -196,9 +242,22 @@ void IBTransport::init_verbs_structs() {
   rtr_attr.qp_state = IBV_QPS_RTS;
   rtr_attr.sq_psn = 0;  // PSN does not matter for UD QPs
 
+#if RoCE_TYPE == UD
   if (ibv_modify_qp(qp, &rtr_attr, IBV_QP_STATE | IBV_QP_SQ_PSN)) {
     throw std::runtime_error("Failed to modify QP to RTS");
   }
+#elif RoCE_TYPE == RC
+  rtr_attr.timeout = 14;
+  rtr_attr.retry_cnt = 7;
+  rtr_attr.rnr_retry = 7;
+  rtr_attr.max_rd_atomic = 1;
+
+  if (ibv_modify_qp(qp, &rtr_attr,
+                    IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT |
+                        IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC)) {
+      throw std::runtime_error("Failed to modify QP to RTS");
+  }
+#endif
 
   // Check if driver is modded for fast RECVs
   struct ibv_recv_wr mod_probe_wr;
@@ -242,8 +301,14 @@ void IBTransport::init_recvs(uint8_t **rx_ring) {
     // From each slot of size kRecvSize = (kMTU + 64), we give up the first
     // (64 - kGRHBytes) bytes. Each slot is still large enough to receive the
     // GRH and kMTU payload bytes.
+    #if RoCE_TYPE == UD
+    // Each chunk is a mbuf, and the first 64 Bytes are for GRH
     const size_t offset = (i * kRecvSize) + (64 - kGRHBytes);
     assert(offset + (kGRHBytes + kMTU) <= ring_extent_size);
+    #elif RoCE_TYPE == RC
+      const size_t offset = (i * kMbufSize);
+      assert(offset + kMTU <= ring_extent_size);
+    #endif
 
     recv_sgl[i].length = kRecvSize;
     recv_sgl[i].lkey = ring_extent.lkey_;
@@ -255,7 +320,11 @@ void IBTransport::init_recvs(uint8_t **rx_ring) {
 
     // Circular link
     recv_wr[i].next = (i < kRQDepth - 1) ? &recv_wr[i + 1] : &recv_wr[0];
-    rx_ring[i] = &buf[offset + kGRHBytes];  // RX ring entry
+    #if RoCE_TYPE == UD
+      rx_ring[i] = &buf[offset + kGRHBytes];  // RX ring entry
+    #elif RoCE_TYPE == RC
+      rx_ring[i] = &buf[offset];  // RX ring entry
+    #endif
   }
 
   // Fill the RECV queue. post_recvs() can use fast RECV and therefore not
@@ -273,7 +342,9 @@ void IBTransport::init_recvs(uint8_t **rx_ring) {
 void IBTransport::init_sends() {
   for (size_t i = 0; i < kPostlist; i++) {
     send_wr[i].next = &send_wr[i + 1];
+    #if RoCE_TYPE == UD
     send_wr[i].wr.ud.remote_qkey = kQKey;
+    #endif
     send_wr[i].opcode = IBV_WR_SEND_WITH_IMM;
     send_wr[i].sg_list = &send_sgl[i][0];
   }

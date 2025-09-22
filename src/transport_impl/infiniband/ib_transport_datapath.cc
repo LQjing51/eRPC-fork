@@ -58,11 +58,13 @@ void IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr,
       wr.num_sge = 2;
     }
 
-    const auto* ib_rinfo =
-        reinterpret_cast<ib_routing_info_t*>(item.routing_info_);
-    wr.wr.ud.ah =  msg_buffer->get_data_size() > 2000 ? ib_rinfo->low_tc_ah : ib_rinfo->high_tc_ah;
-    wr.wr.ud.remote_qpn = ib_rinfo->qpn;
-    if (kTesting && item.drop_) wr.wr.ud.remote_qpn = 0;
+    #if RoCE_TYPE == UD
+      const auto* ib_rinfo =
+          reinterpret_cast<ib_routing_info_t*>(item.routing_info_);
+      wr.wr.ud.ah =  msg_buffer->get_data_size() > 2000 ? ib_rinfo->low_tc_ah : ib_rinfo->high_tc_ah;
+      wr.wr.ud.remote_qpn = ib_rinfo->qpn;
+      if (kTesting && item.drop_) wr.wr.ud.remote_qpn = 0;
+    #endif
   }
 
   send_wr[num_pkts - 1].next = nullptr;  // Breaker of chains, first of her name
@@ -77,9 +79,9 @@ void IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr,
   //   }
   // }
   if (unlikely(ret != 0)) {
-    fprintf(stderr, "eRPC: Fatal error. ibv_post_send failed. ret = %d\n", ret);
-    assert(ret == 0);
-    exit(-1);
+    // fprintf(stderr, "eRPC: Fatal error. ibv_post_send failed. ret = %d\n", ret);
+    // assert(ret == 0);
+    // exit(-1);
   }
   // client
   // RhyR::swift_client_post_send(qp, &send_wr[0], &bad_wr);

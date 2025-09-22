@@ -21,6 +21,10 @@
 #include "util/udp_client.h"
 #include "rhyr.h"
 
+#define UD 0
+#define RC 1
+
+#define RoCE_TYPE RC
 namespace erpc {
 
 /**
