@@ -65,9 +65,6 @@ void Rpc<TTr>::handle_connect_req_st(const SmPkt &sm_pkt) {
     resolve_success = transport_->resolve_remote_routing_info(&client_rinfo);
   }
 
-  // RhyR::add_qp_id_daemon(*(reinterpret_cast<uint32_t*>(&(client_rinfo.buf_[4]))));
-  RhyR::write_qp_id_to_file(*(reinterpret_cast<uint32_t*>(&(client_rinfo.buf_[4]))));
-
   if (!resolve_success) {
     std::string routing_info_str = TTr::routing_info_str(&client_rinfo);
     ERPC_WARN("%s: Unable to resolve routing info %s. Sending response.\n",
