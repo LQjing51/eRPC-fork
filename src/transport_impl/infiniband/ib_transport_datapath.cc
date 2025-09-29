@@ -15,9 +15,8 @@ void IBTransport::tx_burst_for_arp(arp_hdr_t* req_hdr){
 size_t IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr, size_t head, size_t num_pkts) {
   _unused(head);
   for (size_t i = 0; i < num_pkts; i++) {
-    // size_t pos = (i + head) % kNumRxRingEntries;
-    const tx_burst_item_t& item = tx_burst_arr[i];
-    // const tx_burst_item_t& item = tx_burst_arr[pos];
+    size_t pos = (i + head) % kNumRxRingEntries;
+    const tx_burst_item_t& item = tx_burst_arr[pos];
     const MsgBuffer* msg_buffer = item.msg_buffer_;
 
     // Verify constant fields of work request
@@ -105,6 +104,7 @@ size_t IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr, size_t head, s
   // }
   // server
   // int ret = RhyR::swift_server_post_send(qp, &send_wr[0], &bad_wr);
+  // int ret = RhyR::hostcc_server_post_send(qp, &send_wr[0], &bad_wr);
   // if (unlikely(ret != 0)) {
   //   fprintf(stderr, "eRPC: Fatal error. ibv_post_send failed. ret = %d\n", ret);
   //   assert(ret == 0);

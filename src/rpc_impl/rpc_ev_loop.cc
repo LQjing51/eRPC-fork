@@ -19,7 +19,11 @@ void Rpc<TTr>::run_event_loop_do_one_st() {
   if (kCcPacing) process_wheel_st();  // TX
 
   // Drain all packets
-  // if (tx_burst_tail_ !=) do_tx_burst_st();
+  size_t num_pkts = (tx_burst_tail_ - tx_burst_head_ + TTr::kNumRxRingEntries) % TTr::kNumRxRingEntries;
+  if (num_pkts > 0) {
+    size_t ret = do_tx_burst_st(tx_burst_head_, num_pkts);
+    tx_burst_head_ = (tx_burst_head_ + ret) % TTr::kNumRxRingEntries;
+  }
 
   if (unlikely(multi_threaded_)) {
     // Process the background queues

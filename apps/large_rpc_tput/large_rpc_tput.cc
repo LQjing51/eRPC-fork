@@ -229,7 +229,10 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
     // server print log    
     // printf("Thread %zu:", c.thread_id_);
     // RhyR::swift_print_stats();
-    if (unlikely(ctrl_c_pressed == 1)) break;
+    if (unlikely(ctrl_c_pressed == 1)) {
+      // RhyR::hostcc_exit();
+      break;
+    }
     if (c.session_num_vec_.size() == 0) continue;  // No stats to print
 
     const double ns = c.tput_t0.get_ns();

@@ -751,10 +751,11 @@ class Rpc {
                tx_msgbuf->get_pkthdr_str(pkt_idx).c_str(),
                sslot->progress_str().c_str(), item.drop_ ? " Drop." : "");
 
-    tx_burst_tail_++;
+    tx_burst_tail_ = (tx_burst_tail_ + 1) % TTr::kNumRxRingEntries;
     if (((tx_burst_tail_ - tx_burst_head_ + TTr::kNumRxRingEntries) % TTr::kNumRxRingEntries) % TTr::kPostlist == 0) {
       size_t ret = do_tx_burst_st(tx_burst_head_, TTr::kPostlist);
       tx_burst_head_ = (tx_burst_head_ + ret) % TTr::kNumRxRingEntries;
+      if (tx_burst_head_ != tx_burst_tail_) printf("tx_burst_head_ != tx_burst_tail_\n");
     }
   }
 
@@ -825,8 +826,7 @@ class Rpc {
   /// Transmit packets in the TX batch
   inline size_t do_tx_burst_st(size_t head, size_t num_pkts) {
     assert(in_dispatch());
-    assert(num_pkts > 0);
-
+    if (num_pkts == 0) return 0;
     // Measure TX burst size
     dpath_stat_inc(dpath_stats_.tx_burst_calls_, 1);
     dpath_stat_inc(dpath_stats_.pkts_tx_, tx_batch_i_);
@@ -843,7 +843,6 @@ class Rpc {
     }
 
     size_t ret = transport_->tx_burst(tx_burst_arr_, head, num_pkts);
-    // tx_batch_i_ = 0;
     return ret;
   }
 
