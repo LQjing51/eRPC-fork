@@ -24,7 +24,7 @@ int Rpc<TTr>::enqueue_request(int session_num, uint8_t req_type,
   assert(session->is_connected());  // User is notified before we disconnect
 
   if (session->client_info_.credits_ <= 0) {
-    // printf("credits not enough\n");
+    printf("credits not enough\n");
     return 0;
   }
   // If a free sslot is unavailable, save to session backlog

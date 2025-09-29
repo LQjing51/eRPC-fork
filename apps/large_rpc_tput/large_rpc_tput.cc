@@ -36,6 +36,7 @@ std::function<void(AppContext *)> connect_sessions_func = nullptr;
 std::vector<size_t> loop_msgbuf_idx_vec(16, 0);
 static thread_local size_t check_interval_;
 static thread_local size_t check_tsc_;
+static thread_local size_t begin_retrans_idx;
 
 void app_cont_func(void *, void *);  // Forward declaration
 
@@ -104,16 +105,15 @@ void req_handler(erpc::ReqHandle *req_handle, void *_context) {
 
 void retrans_carc_stall(AppContext *c){
   erpc::Session *session = c->rpc_->session_vec_[0];
-  for(size_t i = 0; i < erpc::kSessionReqWindow; i++){
+  for(size_t i = begin_retrans_idx; i < (begin_retrans_idx + erpc::kSessionReqWindow / 8) % erpc::kSessionReqWindow; i++){
     erpc::SSlot &sslot = session->sslot_arr_[i];
-    if(sslot.tx_msgbuf_ != nullptr){
-      if (sslot.client_info_.num_tx_ == 2){
-        session->client_info_.credits_+= 1;
-        session->client_info_.sslot_free_vec_.push_back(sslot.index_);
-        send_req(c,reinterpret_cast<size_t>(sslot.client_info_.tag_), sslot.tx_msgbuf_->get_data_size());
-      }
+    if (sslot.client_info_.num_tx_ == 2){
+      session->client_info_.credits_+= 1;
+      session->client_info_.sslot_free_vec_.push_back(sslot.index_);
+      send_req(c,reinterpret_cast<size_t>(sslot.client_info_.tag_), sslot.tx_msgbuf_->get_data_size());
     }
   }
+  begin_retrans_idx = (begin_retrans_idx + erpc::kSessionReqWindow / 8) % erpc::kSessionReqWindow;
 }
 
 void app_cont_func(void *_context, void *_tag) {
@@ -161,10 +161,10 @@ void app_cont_func(void *_context, void *_tag) {
   send_req(c, buf_idx, req_size);
 
   // check carc stall and retansmit
-  // if (erpc::rdtsc() - check_tsc_ > check_interval_){
-  //   retrans_carc_stall(c);
-  //   check_tsc_ = erpc::rdtsc();
-  // } 
+  if (erpc::rdtsc() - check_tsc_ > check_interval_){
+    retrans_carc_stall(c);
+    check_tsc_ = erpc::rdtsc();
+  } 
 
 }
 
@@ -219,8 +219,9 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
       send_req(&c, msgbuf_idx, req_size);
     }
   }
-  check_interval_ = erpc::ms_to_cycles(100, rpc.get_freq_ghz());
+  check_interval_ = erpc::ms_to_cycles(1, rpc.get_freq_ghz());
   check_tsc_ = erpc::rdtsc();
+  begin_retrans_idx = 0;
 
   c.tput_t0.reset();
   for (size_t i = 0; i < FLAGS_test_ms; i += kAppEvLoopMs) {
@@ -253,10 +254,11 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
       stats.rpc_99_us = kAppEvLoopMs * 1000;
       stats.rpc_999_us = kAppEvLoopMs * 1000;
     }
-    if(stats.rx_gbps == 0){
+    // if(stats.rx_gbps == 0){
       printf("Thread %zu:", c.thread_id_);
-      RhyR::swift_print_stats();
-    }
+      RhyR::hostcc_print_stats();
+      // RhyR::swift_print_stats();
+    // }
     printf(
         "large_rpc_tput: Thread %zu: Tput {RX %.2f (%zu), TX %.2f (%zu)} "
         "Gbps (IOPS). Retransmissions %zu. Packet RTTs: {%.1f, %.1f} us. "
