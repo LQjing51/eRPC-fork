@@ -640,7 +640,8 @@ class Rpc {
   /// Complete transmission for all packets in the Rpc's TX batch and the
   /// transport's DMA queue
   void drain_tx_batch_and_dma_queue() {
-    if (tx_batch_i_ > 0) do_tx_burst_st();
+    printf("in drain_tx_batch_and_dma_queue\n");
+    if (tx_batch_i_ > 0) do_tx_burst_st(0, 0);
     transport_->tx_flush();
   }
 
@@ -732,7 +733,7 @@ class Rpc {
     assert(in_dispatch());
     const MsgBuffer *tx_msgbuf = sslot->tx_msgbuf_;
 
-    Transport::tx_burst_item_t &item = tx_burst_arr_[tx_batch_i_];
+    Transport::tx_burst_item_t &item = tx_burst_arr_[tx_burst_tail_];
     item.routing_info_ = sslot->session_->remote_routing_info_;
     item.msg_buffer_ = const_cast<MsgBuffer *>(tx_msgbuf);
     item.pkt_idx_ = pkt_idx;
@@ -750,8 +751,11 @@ class Rpc {
                tx_msgbuf->get_pkthdr_str(pkt_idx).c_str(),
                sslot->progress_str().c_str(), item.drop_ ? " Drop." : "");
 
-    tx_batch_i_++;
-    if (tx_batch_i_ == TTr::kPostlist) do_tx_burst_st();
+    tx_burst_tail_++;
+    if (((tx_burst_tail_ - tx_burst_head_ + TTr::kNumRxRingEntries) % TTr::kNumRxRingEntries) % TTr::kPostlist == 0) {
+      size_t ret = do_tx_burst_st(tx_burst_head_, TTr::kPostlist);
+      tx_burst_head_ = (tx_burst_head_ + ret) % TTr::kNumRxRingEntries;
+    }
   }
 
   /// Enqueue a control packet for tx_burst. ctrl_msgbuf can be reused after
@@ -778,7 +782,8 @@ class Rpc {
                sslot->progress_str().c_str(), item.drop_ ? " Drop." : "");
 
     tx_batch_i_++;
-    if (tx_batch_i_ == TTr::kPostlist) do_tx_burst_st();
+    printf("in enqueue_hdr_tx_burst_st\n");
+    if (tx_batch_i_ == TTr::kPostlist) do_tx_burst_st(0, 0);
   }
 
   /// Enqueue a request packet to the timing wheel
@@ -818,9 +823,9 @@ class Rpc {
   }
 
   /// Transmit packets in the TX batch
-  inline void do_tx_burst_st() {
+  inline size_t do_tx_burst_st(size_t head, size_t num_pkts) {
     assert(in_dispatch());
-    assert(tx_batch_i_ > 0);
+    assert(num_pkts > 0);
 
     // Measure TX burst size
     dpath_stat_inc(dpath_stats_.tx_burst_calls_, 1);
@@ -837,8 +842,9 @@ class Rpc {
       }
     }
 
-    transport_->tx_burst(tx_burst_arr_, tx_batch_i_);
-    tx_batch_i_ = 0;
+    size_t ret = transport_->tx_burst(tx_burst_arr_, head, num_pkts);
+    // tx_batch_i_ = 0;
+    return ret;
   }
 
   /// Return a credit to this session
@@ -1010,8 +1016,10 @@ class Rpc {
   /// Current number of ring buffers available to use for sessions
   size_t ring_entries_available_ = TTr::kNumRxRingEntries;
 
-  Transport::tx_burst_item_t tx_burst_arr_[TTr::kPostlist];  ///< Tx batch info
+  Transport::tx_burst_item_t tx_burst_arr_[TTr::kNumRxRingEntries];  ///< Tx batch info
   size_t tx_batch_i_ = 0;  ///< The batch index for TX burst array
+  size_t tx_burst_head_ = 0;  ///< The head index for TX burst array
+  size_t tx_burst_tail_ = 0;  ///< The tail index for TX burst array
 
   /// On calling rx_burst(), Transport fills-in packet buffer pointers into the
   /// RX ring. Some transports such as InfiniBand and Raw reuse RX ring packet

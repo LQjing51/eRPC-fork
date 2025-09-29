@@ -19,7 +19,7 @@ void Rpc<TTr>::run_event_loop_do_one_st() {
   if (kCcPacing) process_wheel_st();  // TX
 
   // Drain all packets
-  if (tx_batch_i_ > 0) do_tx_burst_st();
+  // if (tx_burst_tail_ !=) do_tx_burst_st();
 
   if (unlikely(multi_threaded_)) {
     // Process the background queues

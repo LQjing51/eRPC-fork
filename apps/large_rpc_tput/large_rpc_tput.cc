@@ -161,10 +161,10 @@ void app_cont_func(void *_context, void *_tag) {
   send_req(c, buf_idx, req_size);
 
   // check carc stall and retansmit
-  if (erpc::rdtsc() - check_tsc_ > check_interval_){
-    retrans_carc_stall(c);
-    check_tsc_ = erpc::rdtsc();
-  } 
+  // if (erpc::rdtsc() - check_tsc_ > check_interval_){
+  //   retrans_carc_stall(c);
+  //   check_tsc_ = erpc::rdtsc();
+  // } 
 
 }
 
