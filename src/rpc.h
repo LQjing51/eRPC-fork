@@ -751,11 +751,14 @@ class Rpc {
                tx_msgbuf->get_pkthdr_str(pkt_idx).c_str(),
                sslot->progress_str().c_str(), item.drop_ ? " Drop." : "");
 
-    tx_burst_tail_ = (tx_burst_tail_ + 1) % TTr::kNumRxRingEntries;
-    if (((tx_burst_tail_ - tx_burst_head_ + TTr::kNumRxRingEntries) % TTr::kNumRxRingEntries) % TTr::kPostlist == 0) {
-      size_t ret = do_tx_burst_st(tx_burst_head_, TTr::kPostlist);
-      tx_burst_head_ = (tx_burst_head_ + ret) % TTr::kNumRxRingEntries;
-      if (tx_burst_head_ != tx_burst_tail_) printf("tx_burst_head_ != tx_burst_tail_\n");
+    tx_burst_tail_ = tx_burst_tail_ + 1;
+    new_req = new_req + 1;
+    size_t ret = 0;
+    if (tx_burst_tail_ >= TTr::kPostlist && (last_ret == TTr::kPostlist || new_req >= 16)) {
+        ret = do_tx_burst_st(tx_burst_tail_, TTr::kPostlist);
+        last_ret = ret;
+        tx_burst_tail_ -= ret;
+        new_req = 0;
     }
   }
 
@@ -1015,11 +1018,11 @@ class Rpc {
   /// Current number of ring buffers available to use for sessions
   size_t ring_entries_available_ = TTr::kNumRxRingEntries;
 
-  Transport::tx_burst_item_t tx_burst_arr_[TTr::kNumRxRingEntries];  ///< Tx batch info
+  Transport::tx_burst_item_t tx_burst_arr_[kSessionCredits];  ///< Tx batch info
   size_t tx_batch_i_ = 0;  ///< The batch index for TX burst array
-  size_t tx_burst_head_ = 0;  ///< The head index for TX burst array
   size_t tx_burst_tail_ = 0;  ///< The tail index for TX burst array
-
+  size_t last_ret = 0;
+  size_t new_req = 0;
   /// On calling rx_burst(), Transport fills-in packet buffer pointers into the
   /// RX ring. Some transports such as InfiniBand and Raw reuse RX ring packet
   /// buffers in a circular order, so the ring's pointers remain unchanged

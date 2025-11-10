@@ -12,10 +12,9 @@ void IBTransport::tx_burst_for_arp(arp_hdr_t* req_hdr){
 // Packets that are the first packet in their MsgBuffer use one DMA, and may
 // be inlined. Packets that are not the first packet use two DMAs, and are never
 // inlined for simplicity.
-size_t IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr, size_t head, size_t num_pkts) {
-  _unused(head);
+size_t IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr, size_t tail, size_t num_pkts) {
   for (size_t i = 0; i < num_pkts; i++) {
-    size_t pos = (i + head) % kNumRxRingEntries;
+    size_t pos = tail -i - 1;
     const tx_burst_item_t& item = tx_burst_arr[pos];
     const MsgBuffer* msg_buffer = item.msg_buffer_;
 
@@ -71,17 +70,12 @@ size_t IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr, size_t head, s
   struct ibv_send_wr* bad_wr = nullptr;
   // origin
   int ret = ibv_post_send(qp, &send_wr[0], &bad_wr);
-  // if(ret == 0){
-  //   for(size_t i = 0; i < num_pkts; i++){
-  //     SSlot *sslot = reinterpret_cast<SSlot *>(tx_burst_arr[i].sslot_);
-  //     sslot->client_info_.num_tx_++;
-  //   }
-  // }
   if (unlikely(ret != 0)) {
     fprintf(stderr, "eRPC: Fatal error. ibv_post_send failed. ret = %d\n", ret);
     assert(ret == 0);
     exit(-1);
   }
+  size_t post_num = num_pkts;
   // client
   // RhyR::swift_client_post_send(qp, &send_wr[0], &bad_wr);
   // RhyR::hostcc_client_post_send(qp, &send_wr[0], &bad_wr);
@@ -91,17 +85,7 @@ size_t IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr, size_t head, s
   // } else {
   //   post_num = static_cast<size_t>(bad_wr - &send_wr[0]);
   // }
-  // bool after_bad_wr = false;
-  // for (int i = 0; i < static_cast<int>(num_pkts); i++) {
-  //   struct ibv_send_wr* wr = &send_wr[i];
-  //   SSlot *sslot = reinterpret_cast<SSlot *>(tx_burst_arr[i].sslot_);
-  //   if (wr == bad_wr || after_bad_wr) {
-  //     sslot->client_info_.num_tx_ = 2;
-  //     after_bad_wr = true;
-  //   } else {
-  //     sslot->client_info_.num_tx_ = 1;
-  //   }
-  // }
+ 
   // server
   // int ret = RhyR::swift_server_post_send(qp, &send_wr[0], &bad_wr);
   // int ret = RhyR::hostcc_server_post_send(qp, &send_wr[0], &bad_wr);
@@ -111,7 +95,7 @@ size_t IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr, size_t head, s
   //   exit(-1);
   // }
   send_wr[num_pkts - 1].next = &send_wr[num_pkts];  // Restore chain; safe
-  return num_pkts;
+  return post_num;
 }
 
 void IBTransport::tx_flush() {

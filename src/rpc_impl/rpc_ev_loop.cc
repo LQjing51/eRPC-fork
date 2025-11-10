@@ -18,13 +18,6 @@ void Rpc<TTr>::run_event_loop_do_one_st() {
   process_credit_stall_queue_st();    // TX
   if (kCcPacing) process_wheel_st();  // TX
 
-  // Drain all packets
-  size_t num_pkts = (tx_burst_tail_ - tx_burst_head_ + TTr::kNumRxRingEntries) % TTr::kNumRxRingEntries;
-  if (num_pkts > 0) {
-    size_t ret = do_tx_burst_st(tx_burst_head_, num_pkts);
-    tx_burst_head_ = (tx_burst_head_ + ret) % TTr::kNumRxRingEntries;
-  }
-
   if (unlikely(multi_threaded_)) {
     // Process the background queues
     process_bg_queues_enqueue_request_st();
