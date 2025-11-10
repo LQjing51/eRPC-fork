@@ -195,6 +195,7 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
     rpc.run_event_loop(kAppEvLoopMs);
     // server print log    
     // printf("Thread %zu:", c.thread_id_);
+    // RhyR::hostcc_print_stats();
     // RhyR::swift_print_stats();
     if (unlikely(ctrl_c_pressed == 1)) {
       // RhyR::hostcc_exit();
@@ -224,11 +225,7 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
       stats.rpc_99_us = kAppEvLoopMs * 1000;
       stats.rpc_999_us = kAppEvLoopMs * 1000;
     }
-    // if(stats.rx_gbps == 0){
-      printf("Thread %zu:", c.thread_id_);
-      RhyR::hostcc_print_stats();
-      // RhyR::swift_print_stats();
-    // }
+
     printf(
         "large_rpc_tput: Thread %zu: Tput {RX %.2f (%zu), TX %.2f (%zu)} "
         "Gbps (IOPS). Retransmissions %zu. Packet RTTs: {%.1f, %.1f} us. "
