@@ -753,7 +753,12 @@ class Rpc {
 
     tx_burst_tail_ = tx_burst_tail_ + 1;
     size_t ret = 0;
-    int credits = RhyR::get_available_credits(); 
+    int credits = 0;
+    if (sslot->session_->is_client()) {
+      credits = RhyR::get_available_credits(); 
+    } else {
+      credits = INT_MAX;
+    }
     while (tx_burst_tail_ > 0 && tx_burst_tail_ % TTr::kPostlist == 0 && credits >= static_cast<int>(TTr::kPostlist)){
       ret = do_tx_burst_st(tx_burst_tail_, TTr::kPostlist);
       tx_burst_tail_ -= ret;
