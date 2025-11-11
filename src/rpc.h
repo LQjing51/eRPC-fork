@@ -752,13 +752,12 @@ class Rpc {
                sslot->progress_str().c_str(), item.drop_ ? " Drop." : "");
 
     tx_burst_tail_ = tx_burst_tail_ + 1;
-    new_req = new_req + 1;
     size_t ret = 0;
-    if (tx_burst_tail_ >= TTr::kPostlist && (last_ret == TTr::kPostlist || new_req >= 16)) {
-        ret = do_tx_burst_st(tx_burst_tail_, TTr::kPostlist);
-        last_ret = ret;
-        tx_burst_tail_ -= ret;
-        new_req = 0;
+    int credits = RhyR::get_available_credits(); 
+    while (tx_burst_tail_ > 0 && tx_burst_tail_ % TTr::kPostlist == 0 && credits >= static_cast<int>(TTr::kPostlist)){
+      ret = do_tx_burst_st(tx_burst_tail_, TTr::kPostlist);
+      tx_burst_tail_ -= ret;
+      credits -= static_cast<int>(ret);
     }
   }
 
@@ -1021,8 +1020,6 @@ class Rpc {
   Transport::tx_burst_item_t tx_burst_arr_[kSessionCredits];  ///< Tx batch info
   size_t tx_batch_i_ = 0;  ///< The batch index for TX burst array
   size_t tx_burst_tail_ = 0;  ///< The tail index for TX burst array
-  size_t last_ret = 0;
-  size_t new_req = 0;
   /// On calling rx_burst(), Transport fills-in packet buffer pointers into the
   /// RX ring. Some transports such as InfiniBand and Raw reuse RX ring packet
   /// buffers in a circular order, so the ring's pointers remain unchanged

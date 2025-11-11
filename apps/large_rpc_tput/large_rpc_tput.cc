@@ -194,8 +194,8 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
   for (size_t i = 0; i < FLAGS_test_ms; i += kAppEvLoopMs) {
     rpc.run_event_loop(kAppEvLoopMs);
     // server print log    
-    // printf("Thread %zu:", c.thread_id_);
-    // RhyR::hostcc_print_stats();
+    printf("Thread %zu:", c.thread_id_);
+    RhyR::hostcc_print_stats();
     // RhyR::swift_print_stats();
     if (unlikely(ctrl_c_pressed == 1)) {
       // RhyR::hostcc_exit();
