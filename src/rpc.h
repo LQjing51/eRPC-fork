@@ -754,8 +754,16 @@ class Rpc {
     tx_burst_tail_ = tx_burst_tail_ + 1;
     size_t ret = 0;
     int credits = 0;
-    if ((CARC | HOSTCC | SWIFT) && client) {
-      credits = RhyR::get_available_credits(); 
+    if (client) {
+      if (HOSTCC){
+        credits = RhyR::hostcc_get_available_credits();
+      } else if (SWIFT){
+        credits = RhyR::swift_get_available_credits();
+      } else if (CARC){
+        credits = INT_MAX;
+      } else {
+        credits = INT_MAX;
+      }
     }else {
       credits = INT_MAX;
     }

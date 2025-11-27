@@ -18,6 +18,28 @@ void Rpc<TTr>::run_event_loop_do_one_st() {
   process_credit_stall_queue_st();    // TX
   if (kCcPacing) process_wheel_st();  // TX
 
+  // Drain all packets
+  int credits = 0;
+  if (client) {
+    if (HOSTCC){
+      credits = RhyR::hostcc_get_available_credits();
+    } else if (SWIFT){
+      credits = RhyR::swift_get_available_credits();
+    } else if (CARC){
+      credits = INT_MAX;
+    } else {
+      credits = INT_MAX;
+    }
+  } else {
+    credits = INT_MAX;
+  }
+  size_t sending = credits < 0 ? 0 : min(static_cast<size_t>(credits), tx_burst_tail_);
+  while (sending > 0){
+    size_t ret = do_tx_burst_st(tx_burst_tail_, min(sending, TTr::kPostlist));
+    sending -= ret;
+    tx_burst_tail_ -= ret;
+  }
+
   if (unlikely(multi_threaded_)) {
     // Process the background queues
     process_bg_queues_enqueue_request_st();
