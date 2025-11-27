@@ -263,9 +263,19 @@ void IBTransport::init_recvs(uint8_t **rx_ring) {
   struct ibv_recv_wr *bad_wr;
   recv_wr[kRQDepth - 1].next = nullptr;  // Breaker of chains, mother of dragons
 
-  // int ret = ibv_post_recv(qp, &recv_wr[0], &bad_wr);
-  // int ret = RhyR::swift_client_post_recv(qp, &recv_wr[0], &bad_wr);
-  int ret = RhyR::hostcc_client_post_recv(qp, &recv_wr[0], &bad_wr);
+  int ret = 0;
+  if (client){
+    if (SWIFT){
+      ret = RhyR::swift_client_post_recv(qp, &recv_wr[0], &bad_wr);
+    } else if (HOSTCC){
+      ret = RhyR::hostcc_client_post_recv(qp, &recv_wr[0], &bad_wr);
+    } else {
+      ret = ibv_post_recv(qp, &recv_wr[0], &bad_wr);
+    }
+  } else {
+    ret = ibv_post_recv(qp, &recv_wr[0], &bad_wr);
+  }
+
   rt_assert(ret == 0, "Failed to fill RECV queue.");
 
   recv_wr[kRQDepth - 1].next = &recv_wr[0];  // Restore circularity

@@ -2,8 +2,8 @@
 --req_sizes 898
 --resp_sizes 2
 --num_processes 2
---num_proc_0_threads 1
---num_proc_other_threads 1
+--num_proc_0_threads 2
+--num_proc_other_threads 2
 --concurrency 8192
 --app_ticks 0
 --drop_prob 0.0
@@ -11,4 +11,4 @@
 --throttle 0
 --throttle_fraction 0.9
 --numa_0_ports 0
---numa_1_ports 0
+--numa_1_ports 2

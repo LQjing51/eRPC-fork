@@ -9,6 +9,11 @@
 
 namespace erpc {
 
+static constexpr bool client = false;
+static constexpr bool CARC = false;
+static constexpr bool HOSTCC = false;
+static constexpr bool SWIFT = false;
+
 /// Packet loss timeout for an RPC request in microseconds
 static constexpr size_t kRpcRTOUs = 5000;
 

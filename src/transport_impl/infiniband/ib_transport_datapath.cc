@@ -68,35 +68,36 @@ size_t IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr, size_t tail, s
   send_wr[num_pkts - 1].next = nullptr;  // Breaker of chains, first of her name
 
   struct ibv_send_wr* bad_wr = nullptr;
-  // origin
-  // int ret = ibv_post_send(qp, &send_wr[0], &bad_wr);
-  // if (unlikely(ret != 0)) {
-  //   fprintf(stderr, "eRPC: Fatal error. ibv_post_send failed. ret = %d\n", ret);
-  //   assert(ret == 0);
-  //   exit(-1);
-  // }
-  // size_t post_num = num_pkts;
-  // client
-  // RhyR::swift_client_post_send(qp, &send_wr[0], &bad_wr);
-  RhyR::hostcc_client_post_send(qp, &send_wr[0], &bad_wr);
-  size_t post_num = 0;
-  if (bad_wr == nullptr) {
-    post_num = num_pkts;
+
+  int ret = 0;
+  if (client){
+    if (SWIFT){
+      ret = RhyR::swift_client_post_send(qp, &send_wr[0], &bad_wr);
+    } else if (HOSTCC){
+      ret = RhyR::hostcc_client_post_send(qp, &send_wr[0], &bad_wr);
+    } else if (CARC){
+      // ret = RhyR::RhyR_client_post_send_v0(qp, &send_wr[0], &bad_wr);
+    } else {
+      ret = ibv_post_send(qp, &send_wr[0], &bad_wr);
+    }
   } else {
-    post_num = static_cast<size_t>(bad_wr - &send_wr[0]);
+    if (SWIFT){
+      ret = RhyR::swift_server_post_send(qp, &send_wr[0], &bad_wr);
+    } else if (HOSTCC){
+      ret = RhyR::hostcc_server_post_send(qp, &send_wr[0], &bad_wr);
+    } else if (CARC){
+      //
+    } else {
+      ret = ibv_post_send(qp, &send_wr[0], &bad_wr);
+    }
   }
- 
-  // server
-  // int ret = RhyR::swift_server_post_send(qp, &send_wr[0], &bad_wr);
-  // int ret = RhyR::hostcc_server_post_send(qp, &send_wr[0], &bad_wr);
-  // if (unlikely(ret != 0)) {
-  //   fprintf(stderr, "eRPC: Fatal error. ibv_post_send failed. ret = %d\n", ret);
-  //   assert(ret == 0);
-  //   exit(-1);
-  // }
-  // size_t post_num = num_pkts;
+  if (unlikely(ret != 0)) {
+    fprintf(stderr, "eRPC: Fatal error. ibv_post_send failed. ret = %d\n", ret);
+    assert(ret == 0);
+    exit(-1);
+  }
   send_wr[num_pkts - 1].next = &send_wr[num_pkts];  // Restore chain; safe
-  return post_num;
+  return num_pkts;
 }
 
 void IBTransport::tx_flush() {
@@ -144,15 +145,27 @@ void IBTransport::tx_flush() {
 }
 
 size_t IBTransport::rx_burst() {
-  // origin
-  // int ret = ibv_poll_cq(recv_cq, kPostlist, recv_wc);
-  // client
-  // int ret = RhyR::RhyR_client_poll_recv_cq_v0(recv_cq, kPostlist, recv_wc);
-  // int ret = RhyR::swift_client_poll_recv_cq(recv_cq, kPostlist, recv_wc);
-  int ret = RhyR::hostcc_client_poll_recv_cq(recv_cq, kPostlist, recv_wc);
-  // server
-  // int ret = RhyR::RhyR_server_poll_recv_cq(recv_cq, kPostlist, recv_wc);
-  // int ret = RhyR::swift_server_poll_recv_cq(recv_cq, kPostlist, recv_wc);
+
+  int ret = 0;
+  if (client){
+    if (SWIFT){
+      ret = RhyR::swift_client_poll_recv_cq(recv_cq, kPostlist, recv_wc);
+    } else if (HOSTCC){
+      ret = RhyR::hostcc_client_poll_recv_cq(recv_cq, kPostlist, recv_wc);
+    } else if (CARC){
+      ret = RhyR::RhyR_client_poll_recv_cq_v0(recv_cq, kPostlist, recv_wc);
+    } else {
+      ret = ibv_poll_cq(recv_cq, kPostlist, recv_wc);
+    }
+  } else {
+    if (SWIFT){
+      ret = RhyR::swift_server_poll_recv_cq(recv_cq, kPostlist, recv_wc);
+    } else if (CARC){
+      ret = RhyR::RhyR_server_poll_recv_cq(recv_cq, kPostlist, recv_wc);
+    } else {
+      ret = ibv_poll_cq(recv_cq, kPostlist, recv_wc);
+    }
+  }
   assert(ret >= 0);
   return static_cast<size_t>(ret);
 }
@@ -198,9 +211,18 @@ void IBTransport::post_recvs(size_t num_recvs) {
 
   last_wr->next = nullptr;  // Breaker of chains, queen of the First Men
 
-  // ret = ibv_post_recv(qp, first_wr, &bad_wr);
-  // ret = RhyR::swift_client_post_recv(qp, first_wr, &bad_wr);
-  ret = RhyR::hostcc_client_post_recv(qp, first_wr, &bad_wr);
+  if (client){
+    if (SWIFT){
+      ret = RhyR::swift_client_post_recv(qp, first_wr, &bad_wr);
+    } else if (HOSTCC){
+      ret = RhyR::hostcc_client_post_recv(qp, first_wr, &bad_wr);
+    } else {
+      ret = ibv_post_recv(qp, first_wr, &bad_wr);
+    }
+  } else {
+    ret = ibv_post_recv(qp, first_wr, &bad_wr);
+  }
+
   if (unlikely(ret != 0)) {
     fprintf(stderr, "eRPC IBTransport: Post RECV (normal) error %d\n", ret);
     exit(-1);

@@ -193,12 +193,21 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
   c.tput_t0.reset();
   for (size_t i = 0; i < FLAGS_test_ms; i += kAppEvLoopMs) {
     rpc.run_event_loop(kAppEvLoopMs);
-    // server print log    
-    printf("Thread %zu:", c.thread_id_);
-    RhyR::hostcc_print_stats();
-    // RhyR::swift_print_stats();
+    // server print log
+    if (erpc::client) {
+      printf("Thread %zu:", c.thread_id_);
+      if (erpc::HOSTCC) {
+        RhyR::hostcc_print_stats();
+      } else if (erpc::SWIFT) {
+        RhyR::swift_print_stats();
+      } else if (erpc::CARC) {
+        // RhyR::RhyR_print_stats();
+      }
+    }
     if (unlikely(ctrl_c_pressed == 1)) {
-      // RhyR::hostcc_exit();
+      if (erpc::HOSTCC && !erpc::client) {
+        RhyR::hostcc_exit();
+      }
       break;
     }
     if (c.session_num_vec_.size() == 0) continue;  // No stats to print
