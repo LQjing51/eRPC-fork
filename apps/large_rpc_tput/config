@@ -12,3 +12,4 @@
 --throttle_fraction 0.9
 --numa_0_ports 0
 --numa_1_ports 0
+--latency_output_file RPC_lat_CDF.txt

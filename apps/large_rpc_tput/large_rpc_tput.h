@@ -27,6 +27,7 @@ DEFINE_double(drop_prob, 0, "Packet drop probability");
 DEFINE_string(profile, "", "Experiment profile to use");
 DEFINE_double(throttle, 0, "Throttle flows to incast receiver?");
 DEFINE_double(throttle_fraction, 1, "Fraction of fair share to throttle to.");
+DEFINE_string(latency_output_file, "", "Output file for latency data (CDF format)");
 
 /// Return the req sizes of different threads.
 std::vector<size_t> flags_get_req_sizes() {
@@ -115,7 +116,8 @@ class AppContext : public BasicAppContext {
  public:
   // We need a wide range of latency measurements: ~4 us for 4KB RPCs, to
   // >10 ms for 8MB RPCs under congestion. So erpc::Latency doesn't work here.
-  std::vector<double> lat_vec;
+  std::vector<double> lat_vec;  // Current interval latency samples
+  std::vector<double> lat_vec_accumulated;  // Accumulated latency samples for export
 
   erpc::ChronoTimer tput_t0;  // Start time for throughput measurement
   app_stats_t* app_stats;     // Common stats array for all threads

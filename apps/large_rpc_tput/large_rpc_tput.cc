@@ -16,12 +16,18 @@
 #include "large_rpc_tput.h"
 #include <signal.h>
 #include <cstring>
+#include <mutex>
+#include <fstream>
 #include "profile_incast.h"
 #include "profile_victim.h"
 #include "util/autorun_helpers.h"
 
 static constexpr size_t kAppEvLoopMs = 1000;  // Duration of event loop
 static constexpr bool kAppVerbose = false;
+
+// Global data structure for collecting latency samples from all threads
+static std::mutex lat_export_mutex;
+static std::vector<double> global_lat_vec;
 
 // Experiment control flags
 static constexpr bool kAppClientMemsetReq = false;   // Fill entire request
@@ -243,6 +249,16 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
         stats.rtt_50_us, stats.rtt_99_us, stats.rpc_50_us, stats.rpc_99_us,
         stats.rpc_999_us, timely_0->get_rate_gbps(), c.rpc_->get_credits(c.session_num_vec_[0]));
 
+    // Accumulate latency samples for export (before clearing)
+    if (!FLAGS_latency_output_file.empty() && c.lat_vec.size() > 0) {
+      c.lat_vec_accumulated.insert(c.lat_vec_accumulated.end(),
+                                    c.lat_vec.begin(), c.lat_vec.end());
+      // Also add to global vector (thread-safe)
+      std::lock_guard<std::mutex> lock(lat_export_mutex);
+      global_lat_vec.insert(global_lat_vec.end(),
+                            c.lat_vec.begin(), c.lat_vec.end());
+    }
+
     // Reset stats for next iteration
     c.stat_rx_bytes_tot = 0;
     c.stat_tx_bytes_tot = 0;
@@ -284,6 +300,16 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
 
       if (num_printed++ == num_to_print) break;
     }
+  }
+
+  // Accumulate any remaining latency samples
+  if (!FLAGS_latency_output_file.empty() && c.lat_vec.size() > 0) {
+    c.lat_vec_accumulated.insert(c.lat_vec_accumulated.end(),
+                                  c.lat_vec.begin(), c.lat_vec.end());
+    // Also add to global vector (thread-safe)
+    std::lock_guard<std::mutex> lock(lat_export_mutex);
+    global_lat_vec.insert(global_lat_vec.end(),
+                          c.lat_vec.begin(), c.lat_vec.end());
   }
 
   // We don't disconnect sessions
@@ -335,5 +361,53 @@ int main(int argc, char **argv) {
   }
 
   for (auto &thread : threads) thread.join();
+
+  // Export latency data to file if requested
+  if (!FLAGS_latency_output_file.empty()) {
+    std::lock_guard<std::mutex> lock(lat_export_mutex);
+
+    const size_t target_samples = 2000;
+    const size_t total_samples = global_lat_vec.size();
+
+    if (total_samples >= target_samples) {
+      // Sort latencies for CDF
+      std::sort(global_lat_vec.begin(), global_lat_vec.end());
+
+      // Sample uniformly to get exactly target_samples points
+      std::vector<double> sampled_latencies;
+      if (total_samples <= target_samples) {
+        // If we have fewer or equal samples, use all
+        sampled_latencies = global_lat_vec;
+      } else {
+        // Uniform sampling: select indices 0, step, 2*step, ..., (target_samples-1)*step
+        // This ensures we get min, max, and evenly distributed points
+        sampled_latencies.reserve(target_samples);
+        double step = static_cast<double>(total_samples - 1) / (target_samples - 1);
+        for (size_t i = 0; i < target_samples; i++) {
+          size_t idx = static_cast<size_t>(i * step + 0.5);  // Round to nearest
+          if (idx >= total_samples) idx = total_samples - 1;  // Safety check
+          sampled_latencies.push_back(global_lat_vec[idx]);
+        }
+      }
+
+      // Write to file: one latency value per line (for CDF plotting)
+      std::ofstream outfile(FLAGS_latency_output_file);
+      if (outfile.is_open()) {
+        for (size_t i = 0; i < sampled_latencies.size(); i++) {
+          outfile << sampled_latencies[i] << "\n";
+        }
+        outfile.close();
+        printf("Exported %zu latency samples (sampled from %zu total) to %s\n",
+               sampled_latencies.size(), total_samples, FLAGS_latency_output_file.c_str());
+      } else {
+        fprintf(stderr, "Failed to open output file: %s\n",
+                FLAGS_latency_output_file.c_str());
+      }
+    } else {
+      printf("Warning: Only collected %zu latency samples (need at least %zu). "
+             "Not exporting to file.\n", total_samples, target_samples);
+    }
+  }
+
   delete[] app_stats;
 }
