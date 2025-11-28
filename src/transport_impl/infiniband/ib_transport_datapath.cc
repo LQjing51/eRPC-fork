@@ -147,6 +147,9 @@ void IBTransport::tx_flush() {
 size_t IBTransport::rx_burst() {
 
   int ret = 0;
+  int max_poll = 0;
+  if (queue_size) {max_poll = kRQDepth;} else {max_poll = kPostlist;}
+
   if (client){
     if (SWIFT){
       ret = RhyR::swift_client_poll_recv_cq(recv_cq, kPostlist, recv_wc);
@@ -159,11 +162,11 @@ size_t IBTransport::rx_burst() {
     }
   } else {
     if (SWIFT){
-      ret = RhyR::swift_server_poll_recv_cq(recv_cq, kPostlist, recv_wc);
+      ret = RhyR::swift_server_poll_recv_cq(recv_cq, max_poll, recv_wc);
     } else if (CARC){
-      ret = RhyR::RhyR_server_poll_recv_cq(recv_cq, kPostlist, recv_wc);
+      ret = RhyR::RhyR_server_poll_recv_cq(recv_cq, max_poll, recv_wc);
     } else {
-      ret = ibv_poll_cq(recv_cq, kPostlist, recv_wc);
+      ret = ibv_poll_cq(recv_cq, max_poll, recv_wc);
     }
   }
   assert(ret >= 0);

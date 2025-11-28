@@ -13,7 +13,16 @@ void Rpc<TTr>::run_event_loop_do_one_st() {
   // The packet RX code uses ev_loop_tsc as the RX timestamp, so it must be
   // next to ev_loop_tsc stamping.
   ev_loop_tsc_ = dpath_rdtsc();
-  process_comps_st();  // RX
+  size_t num = process_comps_st();  // RX
+
+
+  // counter queuing size
+  // if (queue_size && num > 0 && poll_counter++ % 1000 == 0) {
+  if (num > 0) {
+    // printf("num: %zu, poll_counter: %d, stats_count: %d\n", num, poll_counter, stats_count);
+    avg_poll_num = (avg_poll_num * stats_count + num) / (stats_count + 1);
+    stats_count++;
+  }
 
   process_credit_stall_queue_st();    // TX
   if (kCcPacing) process_wheel_st();  // TX

@@ -9,7 +9,8 @@
 
 namespace erpc {
 
-static constexpr bool client = true;
+static constexpr bool client = false;
+static constexpr bool queue_size = false;
 static constexpr bool CARC = false;
 static constexpr bool HOSTCC = false;
 static constexpr bool SWIFT = false;

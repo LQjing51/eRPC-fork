@@ -199,6 +199,13 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
   c.tput_t0.reset();
   for (size_t i = 0; i < FLAGS_test_ms; i += kAppEvLoopMs) {
     rpc.run_event_loop(kAppEvLoopMs);
+
+    if (unlikely(ctrl_c_pressed == 1)) {
+      if (erpc::HOSTCC && !erpc::client) {
+        RhyR::hostcc_exit();
+      }
+      break;
+    }
     // server print log
     if (erpc::HOSTCC && erpc::client){
       printf("Thread %zu:", c.thread_id_);
@@ -208,12 +215,12 @@ void thread_func(size_t thread_id, app_stats_t *app_stats, erpc::Nexus *nexus) {
       printf("Thread %zu:", c.thread_id_);
       RhyR::swift_print_stats();
     }
-    if (unlikely(ctrl_c_pressed == 1)) {
-      if (erpc::HOSTCC && !erpc::client) {
-        RhyR::hostcc_exit();
-      }
-      break;
+    if (erpc::queue_size) {
+      printf("Thread %zu: avg_poll_num %.2f\n", c.thread_id_, c.rpc_->avg_poll_num);
+      c.rpc_->stats_count = 0;
+      c.rpc_->avg_poll_num = 0;
     }
+
     if (c.session_num_vec_.size() == 0) continue;  // No stats to print
 
     const double ns = c.tput_t0.get_ns();
@@ -366,7 +373,7 @@ int main(int argc, char **argv) {
   if (!FLAGS_latency_output_file.empty()) {
     std::lock_guard<std::mutex> lock(lat_export_mutex);
 
-    const size_t target_samples = 2000;
+    const size_t target_samples = 200;
     const size_t total_samples = global_lat_vec.size();
 
     if (total_samples >= target_samples) {

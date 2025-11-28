@@ -886,7 +886,7 @@ class Rpc {
    * the order or time at which these packets are sent, due to constraints like
    * session credits and packet pacing.
    */
-  void process_comps_st();
+  size_t process_comps_st();
 
   /**
    * @brief Submit a request work item to a random background thread
@@ -1133,6 +1133,10 @@ class Rpc {
   /// but some applications might benefit from a larger preallocated buffer,
   /// at the expense of increased memory utilization.
   size_t pre_resp_msgbuf_size_ = TTr::kMaxDataPerPkt;
+
+ // Counter for queue size
+  double avg_poll_num = 0;
+  int stats_count = 0;
 };
 
 // This goes at the end of every Rpc implementation file to force compilation

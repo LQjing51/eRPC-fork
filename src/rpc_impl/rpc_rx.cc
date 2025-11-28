@@ -15,10 +15,10 @@ void Rpc<TTr>::handle_arp_packet(uint8_t* pkthdr){
 }
 
 template <class TTr>
-void Rpc<TTr>::process_comps_st() {
+size_t Rpc<TTr>::process_comps_st() {
   assert(in_dispatch());
   const size_t num_pkts = transport_->rx_burst();
-  if (num_pkts == 0) return;
+  if (num_pkts == 0) return 0;
 
   // Measure RX burst size
   dpath_stat_inc(dpath_stats_.rx_burst_calls_, 1);
@@ -106,6 +106,7 @@ void Rpc<TTr>::process_comps_st() {
   // Technically, these RECVs can be posted immediately after rx_burst(), or
   // even in the rx_burst() code.
   transport_->post_recvs(num_pkts);
+  return num_pkts;
 }
 
 template <class TTr>
