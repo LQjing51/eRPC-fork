@@ -5,9 +5,11 @@
 #include <signal.h>
 #include <unordered_map>
 #include <optional>
+#include <cstring>
+#include <vector>
+#include <algorithm>
 #include "../apps_common.h"
 #include "rpc.h"
-#include "util/latency.h"
 #include "util/numautils.h"
 #include "util/timer.h"
 
@@ -15,6 +17,7 @@ static constexpr size_t kAppGetFgType = 1;
 static constexpr size_t kAppGetBgType = 2;
 static constexpr size_t kAppPutFgType = 3;
 static constexpr size_t kAppPutBgType = 4;
+static constexpr size_t kAppScanType = 5;
 static constexpr size_t kAppEvLoopMs = 500;
 
 static constexpr size_t kAppMaxReqWindow = 1024;  // Max pending reqs per client
@@ -30,6 +33,7 @@ DEFINE_uint64(num_client_threads, 0, "Number of client threads");
 DEFINE_uint64(req_window, 0, "Outstanding requests per client thread");
 DEFINE_uint64(num_keys, 0, "Number of keys in the server's Hashmap");
 DEFINE_uint64(get_req_percent, 0, "Percentage of get");
+DEFINE_uint64(scan_req_percent, 0, "Percentage of scan");//should be larger than get_req_percent, 0-get_req_percent: get; get_req_percent-scan_req_percent: scan; scan_req_percent-100: put
 DEFINE_uint64(get_fg_percent, 0, "Percentage of get requests allocated to fg threads");
 DEFINE_uint64(put_fg_percent, 0, "Percentage of put requests allocated to fg threads");
 
@@ -68,7 +72,7 @@ public:
         k >>= 8;
       }
       value_t value;
-      size_t v = i*0x12345+0x10501;
+      uint64_t v = static_cast<uint64_t>(i)*0x12345+0x10501;
       for(size_t t = 0; t < kValueSize; t++) {
         value.value_[t] = v & ((1<<8) - 1);
         v >>= 8;
@@ -88,11 +92,49 @@ public:
     auto it = kvmap.find(key);
 
     if (it != kvmap.end()) {
-      memcpy(value->value_, &(it->second), KV::kValueSize);
+      memcpy(value->value_, it->second.value_, KV::kValueSize);
       return true;
     }
 
     return false;
+  }
+
+  bool scan(key_t key, value_t* value) {
+    // 将 key 转换为 uint32_t（使用前4字节）
+    const uint32_t* start_key_32 = reinterpret_cast<const uint32_t*>(key.key_);
+    uint32_t start_key = *start_key_32;
+
+    // 初始化 value 为0
+    memset(value->value_, 0, kValueSize);
+    uint64_t* result_value = reinterpret_cast<uint64_t*>(value->value_);
+    *result_value = 0;
+
+    bool found_any = false;
+
+    // 从 start_key 开始，连续读取128个键值对
+    for (uint32_t i = 0; i < 128; i++) {
+      uint32_t current_key_val = start_key + i;
+
+      // 构造当前 key
+      key_t current_key;
+      memset(current_key.key_, 0, kKeySize);
+      uint32_t* current_key_32 = reinterpret_cast<uint32_t*>(current_key.key_);
+      *current_key_32 = current_key_val;
+
+      // 在 map 中查找
+      auto it = kvmap.find(current_key);
+      // if exceed num_keys, just break, but at least we get one value successfully
+      if (it != kvmap.end()) {
+        // 将 value 的前8字节作为 uint64_t 累加
+        const uint64_t* val_64 = reinterpret_cast<const uint64_t*>(it->second.value_);
+        *result_value += *val_64;
+        found_any = true;
+      } else {
+        break;
+      }
+    }
+
+    return found_any;
   }
 
 private:
@@ -119,11 +161,11 @@ private:
 
 // req size = size_t + kKeySize + kValueSize = 88 bytes
 struct wire_req_t {
-  size_t req_type;//kAppGetType or kAppPutType
+  size_t req_type;//kAppGetType or kAppPutType or kAppScanType
   union {
     struct {
       KV::key_t key;
-    } get_req;
+    } get_req;//get or scan
 
     struct {
       KV::key_t key;
@@ -133,9 +175,9 @@ struct wire_req_t {
 
   std::string to_string() const {
     std::ostringstream ret;
-    ret << "[Type " << ((req_type == kAppGetFgType || req_type == kAppGetBgType) ? "get" : "put")
+    ret << "[Type " << ((req_type == kAppGetFgType || req_type == kAppGetBgType) ? "get" : (req_type == kAppPutFgType || req_type == kAppPutBgType) ? "put" : "scan")
         << ", key: ";
-    if (req_type == kAppGetFgType || req_type == kAppGetBgType) {
+    if (req_type == kAppGetFgType || req_type == kAppGetBgType || req_type == kAppScanType) {
       const uint64_t *key_64 =
           reinterpret_cast<const uint64_t *>(get_req.key.key_);
       for (size_t i = 0; i < KV::kKeySize / sizeof(uint64_t); i++) {
@@ -216,8 +258,10 @@ class AppContext : public BasicAppContext {
     erpc::ChronoTimer tput_timer;  // Throughput measurement start
     app_stats_t *app_stats;        // Common stats array for all threads
 
-    erpc::Latency get_latency;
-    erpc::Latency put_latency;
+    // Use vector<double> for latency samples (similar to large_rpc_tput)
+    std::vector<double> get_lat_vec;   // Current interval latency samples for get
+    std::vector<double> put_lat_vec;   // Current interval latency samples for put
+    std::vector<double> scan_lat_vec;   // Current interval latency samples for scan
 
     struct {
       KV::key_t req_key;

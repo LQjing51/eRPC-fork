@@ -1,11 +1,12 @@
 --test_ms 200000
 --num_processes 2
---num_server_fg_threads 8
+--num_server_fg_threads 1
 --num_server_bg_threads 0
---num_client_threads 8
+--num_client_threads 1
 --req_window 256
---num_keys 1000
+--num_keys 100000
 --get_req_percent 50
+--scan_req_percent 80
 --get_fg_percent 100
 --put_fg_percent 100
 --numa_0_ports 0
