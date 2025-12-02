@@ -1,11 +1,107 @@
 #include "kv.h"
 #include <signal.h>
 #include <cstring>
+#include <sstream>
 #include "util/autorun_helpers.h"
 
 void app_cont_func(void *, void *);  // Forward declaration
 
 static constexpr bool kAppVerbose = false;
+
+// Parsed per-thread request mix percentages.
+// These are filled on the client side in main() before starting threads.
+static std::vector<size_t> g_get_req_percent_vec;
+static std::vector<size_t> g_scan_req_percent_vec;
+static std::vector<size_t> g_req_window_vec;
+
+// Helper: parse a comma-separated list of integers in [0, 100]
+static std::vector<size_t> parse_percent_list(const std::string &s,
+                                              const char *flag_name) {
+  std::vector<size_t> result;
+  if (s.empty()) return result;
+
+  std::string token;
+  std::stringstream ss(s);
+  while (std::getline(ss, token, ',')) {
+    // Trim leading/trailing spaces
+    size_t start = token.find_first_not_of(" \t");
+    size_t end = token.find_last_not_of(" \t");
+    if (start == std::string::npos) continue;  // All whitespace
+    std::string trimmed = token.substr(start, end - start + 1);
+
+    size_t val = 0;
+    try {
+      val = static_cast<size_t>(std::stoul(trimmed));
+    } catch (...) {
+      erpc::rt_assert(false,
+                      ("Invalid value '" + trimmed + "' for " +
+                       std::string(flag_name) +
+                       ": must be an integer between 0 and 100")
+                          .c_str());
+    }
+
+    erpc::rt_assert(val <= 100,
+                    ("Invalid value for " + std::string(flag_name) +
+                     ": must be between 0 and 100")
+                        .c_str());
+    result.push_back(val);
+  }
+
+  return result;
+}
+
+// Helper: parse a comma-separated list of integers in [1, max_allowed]
+static std::vector<size_t> parse_size_list(const std::string &s,
+                                           const char *flag_name,
+                                           size_t max_allowed) {
+  std::vector<size_t> result;
+  if (s.empty()) {
+    erpc::rt_assert(false,
+                    ("No values provided for " + std::string(flag_name))
+                        .c_str());
+  }
+
+  std::string token;
+  std::stringstream ss(s);
+  while (std::getline(ss, token, ',')) {
+    size_t start = token.find_first_not_of(" \t");
+    size_t end = token.find_last_not_of(" \t");
+    if (start == std::string::npos) continue;  // All whitespace
+    std::string trimmed = token.substr(start, end - start + 1);
+
+    size_t val = 0;
+    try {
+      val = static_cast<size_t>(std::stoul(trimmed));
+    } catch (...) {
+      erpc::rt_assert(false,
+                      ("Invalid value '" + trimmed + "' for " +
+                       std::string(flag_name) +
+                       ": must be an integer between 1 and " +
+                       std::to_string(max_allowed))
+                          .c_str());
+    }
+
+    erpc::rt_assert(
+        val >= 1 && val <= max_allowed,
+        ("Invalid value for " + std::string(flag_name) + ": must be between 1 and " +
+         std::to_string(max_allowed))
+            .c_str());
+    result.push_back(val);
+  }
+
+  erpc::rt_assert(!result.empty(),
+                  ("No valid values provided for " + std::string(flag_name))
+                      .c_str());
+  return result;
+}
+
+// Helper: get per-thread percentage, reusing the last entry for extra threads
+static inline size_t get_thread_percent(const std::vector<size_t> &vec,
+                                        size_t thread_id) {
+  if (vec.empty()) return 0;
+  if (thread_id < vec.size()) return vec[thread_id];
+  return vec.back();
+}
 
 void get_req_handler(erpc::ReqHandle *req_handle, void *_context) {
   auto *c = static_cast<AppContext *>(_context);
@@ -58,7 +154,7 @@ void scan_req_handler(erpc::ReqHandle *req_handle, void *_context) {
   auto *resp =
       reinterpret_cast<wire_resp_t *>(req_handle->pre_resp_msgbuf_.buf_);
   memset(&(resp->value), 0, KV::kValueSize);
-  const bool success = kv->scan(req->get_req.key, &(resp->value));
+  const bool success = kv->scan(req->get_req.key, &(resp->value), FLAGS_scan_size);
   resp->resp_type = success ? RespType::Success : RespType::Failure;
   // printf("%d, key %ld value: %ld\n", success, *reinterpret_cast<size_t*>(req->get_req.key.key_), *reinterpret_cast<size_t*>(resp->value.value_));
 
@@ -107,12 +203,23 @@ void send_req(AppContext *c, size_t msgbuf_idx) {
   erpc::MsgBuffer &req_msgbuf = c->client.window_[msgbuf_idx].req_msgbuf_;
   assert(req_msgbuf.get_data_size() == sizeof(wire_req_t));
 
+  // Per-thread request mix configuration
+  const size_t get_percent =
+      get_thread_percent(g_get_req_percent_vec, c->thread_id_);
+  const size_t scan_percent =
+      get_thread_percent(g_scan_req_percent_vec, c->thread_id_);
+
+  erpc::rt_assert(get_percent <= 100 && scan_percent <= 100 &&
+                      get_percent <= scan_percent,
+                  "Invalid per-thread request mix: require "
+                  "0 <= get_req_percent <= scan_req_percent <= 100");
+
   // Generate a random request
   wire_req_t req;
   uint32_t rand_key_tmp = c->fastrand_.next_u32() % FLAGS_num_keys;
   uint32_t rand_key = FLAGS_skewed ? (rand_key_tmp < FLAGS_num_keys - 1 ? 0 : c->fastrand_.next_u32() % FLAGS_num_keys) : rand_key_tmp;
   uint32_t rand_num = c->fastrand_.next_u32() % 100;
-  if (rand_num < FLAGS_get_req_percent) {
+  if (rand_num < get_percent) {
     if (c->fastrand_.next_u32() % 100 < FLAGS_get_fg_percent) {
       req.req_type = kAppGetFgType;
     } else {
@@ -127,7 +234,7 @@ void send_req(AppContext *c, size_t msgbuf_idx) {
     uint32_t *key_32 = reinterpret_cast<uint32_t *>(req.get_req.key.key_);
     *key_32 = rand_key;
 
-  } else if (rand_num < FLAGS_scan_req_percent) {
+  } else if (rand_num < scan_percent) {
     req.req_type = kAppScanType;
     /*
     ensure the key size is larger or equal to 4 Bytes.
@@ -220,7 +327,7 @@ void app_cont_func(void *_context, void *_msgbuf_idx) {
       const uint32_t key_value = *reinterpret_cast<const uint32_t *>(c->client.window_[msgbuf_idx].req_key.key_);
       uint32_t tmp_key = key_value;
       uint64_t scan_value = 0;
-      for(int i = 0; i < 128 && tmp_key < FLAGS_num_keys; i++, tmp_key++) {
+      for(uint32_t i = 0; i < FLAGS_scan_size && tmp_key < FLAGS_num_keys; i++, tmp_key++) {
         scan_value += static_cast<uint64_t>(tmp_key)*0x12345+0x10501;
       }
       if (scan_value != *recvd_value) {
@@ -299,6 +406,14 @@ void client_thread_func(size_t thread_id, app_stats_t *app_stats,
   rpc.retry_connect_on_invalid_rpc_id_ = true;
   c.rpc_ = &rpc;
 
+  // Per-thread req_window configuration
+  const size_t thread_req_window =
+      get_thread_percent(g_req_window_vec, thread_id);
+  erpc::rt_assert(thread_req_window >= 1 &&
+                      thread_req_window <= kAppMaxReqWindow,
+                  "Invalid per-thread req_window: must be in [1, kAppMaxReqWindow]");
+  c.client.req_window = thread_req_window;
+
   // Each client creates a session to only one server thread
   const size_t client_gid =
       (FLAGS_process_id * FLAGS_num_client_threads) + thread_id;
@@ -318,9 +433,9 @@ void client_thread_func(size_t thread_id, app_stats_t *app_stats,
   fprintf(stderr, "main: Thread %zu: Connected. Sending requests.\n",
           thread_id);
 
-  alloc_req_resp_msg_buffers(&c);
+  alloc_req_resp_msg_buffers(&c, thread_req_window);
   c.client.tput_timer.reset();
-  for (size_t i = 0; i < FLAGS_req_window; i++) send_req(&c, i);
+  for (size_t i = 0; i < thread_req_window; i++) send_req(&c, i);
 
   for (size_t i = 0; i < FLAGS_test_ms; i += kAppEvLoopMs) {
     c.rpc_->run_event_loop(kAppEvLoopMs);
@@ -371,8 +486,6 @@ void server_thread_func(size_t thread_id, erpc::Nexus *nexus) {
 int main(int argc, char **argv) {
   signal(SIGINT, ctrl_c_handler);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
-  erpc::rt_assert(FLAGS_req_window <= kAppMaxReqWindow, "Invalid req window");
-  erpc::rt_assert(FLAGS_get_req_percent <= 100, "Invalid get req percent");
 
   if (FLAGS_num_server_bg_threads == 0) {
     printf(
@@ -416,6 +529,50 @@ int main(int argc, char **argv) {
     for (auto &thread : thread_arr) thread.join();
   } else {
     erpc::rt_assert(FLAGS_process_id > 0, "Invalid process ID");
+
+    // Parse per-thread request mix configuration for client threads.
+    // Each flag is a comma-separated list of integers in [0, 100].
+    // If the list has fewer entries than client threads, the last entry is
+    // reused for the remaining threads.
+    g_get_req_percent_vec = parse_percent_list(FLAGS_get_req_percent,
+                                               "get_req_percent");
+    g_scan_req_percent_vec = parse_percent_list(FLAGS_scan_req_percent,
+                                                "scan_req_percent");
+
+    // Parse per-thread req_window (comma-separated list of integers in
+    // [1, kAppMaxReqWindow]). If the list has fewer entries than client
+    // threads, the last entry is reused for the remaining threads.
+    g_req_window_vec =
+        parse_size_list(FLAGS_req_window, "req_window", kAppMaxReqWindow);
+
+    erpc::rt_assert(
+        g_req_window_vec.size() == FLAGS_num_client_threads ||
+            g_req_window_vec.size() == 1,
+        "req_window should either have one entry (broadcast to all threads) "
+        "or num_client_threads entries");
+
+    // Basic sanity for all configured entries
+    erpc::rt_assert(g_get_req_percent_vec.size() ==
+                        g_scan_req_percent_vec.size() ||
+                        g_get_req_percent_vec.size() == 1 ||
+                        g_scan_req_percent_vec.size() == 1,
+                    "get_req_percent and scan_req_percent should either have "
+                    "the same number of entries, or one of them should have "
+                    "a single entry to be broadcast to all threads");
+
+    // Check per-entry relation get <= scan
+    const size_t max_size =
+        std::max(g_get_req_percent_vec.size(), g_scan_req_percent_vec.size());
+    for (size_t i = 0; i < max_size; i++) {
+      const size_t get_p =
+          get_thread_percent(g_get_req_percent_vec, i);
+      const size_t scan_p =
+          get_thread_percent(g_scan_req_percent_vec, i);
+      erpc::rt_assert(get_p <= scan_p,
+                      "For each thread, require get_req_percent <= "
+                      "scan_req_percent");
+    }
+
     erpc::Nexus nexus(erpc::get_uri_for_process(FLAGS_process_id),
                       FLAGS_numa_node, FLAGS_num_server_bg_threads);
 

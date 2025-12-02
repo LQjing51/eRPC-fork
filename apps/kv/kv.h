@@ -8,6 +8,7 @@
 #include <cstring>
 #include <vector>
 #include <algorithm>
+#include <string>
 #include "../apps_common.h"
 #include "rpc.h"
 #include "util/numautils.h"
@@ -30,10 +31,17 @@ void ctrl_c_handler(int) { ctrl_c_pressed = 1; }
 DEFINE_uint64(num_server_fg_threads, 0, "Number of server foreground threads");
 DEFINE_uint64(num_server_bg_threads, 0, "Number of server background threads");
 DEFINE_uint64(num_client_threads, 0, "Number of client threads");
-DEFINE_uint64(req_window, 0, "Outstanding requests per client thread");
+DEFINE_string(req_window, "",
+              "Per-thread outstanding requests (comma-separated list)");
 DEFINE_uint64(num_keys, 0, "Number of keys in the server's Hashmap");
-DEFINE_uint64(get_req_percent, 0, "Percentage of get");
-DEFINE_uint64(scan_req_percent, 0, "Percentage of scan");//should be larger than get_req_percent, 0-get_req_percent: get; get_req_percent-scan_req_percent: scan; scan_req_percent-100: put
+DEFINE_uint64(scan_size, 128, "Number of keys to scan");
+DEFINE_string(get_req_percent, "",
+              "Per-thread percentage of get requests (comma-separated list)");
+DEFINE_string(scan_req_percent, "",
+              "Per-thread percentage of scan requests (comma-separated list). "
+              "For each thread: 0-get_req_percent: get; "
+              "get_req_percent-scan_req_percent: scan; "
+              "scan_req_percent-100: put");
 DEFINE_uint64(skewed, 0, "Skewed request distribution");//0: uniform; 1: skewed
 DEFINE_uint64(get_fg_percent, 0, "Percentage of get requests allocated to fg threads");
 DEFINE_uint64(put_fg_percent, 0, "Percentage of put requests allocated to fg threads");
@@ -100,7 +108,7 @@ public:
     return false;
   }
 
-  bool scan(key_t key, value_t* value) {
+  bool scan(key_t key, value_t* value, size_t scan_size) {
     // 将 key 转换为 uint32_t（使用前4字节）
     const uint32_t* start_key_32 = reinterpret_cast<const uint32_t*>(key.key_);
     uint32_t start_key = *start_key_32;
@@ -113,7 +121,7 @@ public:
     bool found_any = false;
 
     // 从 start_key 开始，连续读取128个键值对
-    for (uint32_t i = 0; i < 128; i++) {
+    for (uint32_t i = 0; i < scan_size; i++) {
       uint32_t current_key_val = start_key + i;
 
       // 构造当前 key
@@ -276,12 +284,13 @@ class AppContext : public BasicAppContext {
     size_t num_resps_get = 0;  // Total responses received for get
     size_t num_resps_put = 0;  // Total responses received for put
     size_t num_resps_scan = 0;  // Total responses received for scan
+    size_t req_window = 0;      // Per-thread outstanding requests
   } client;
 };
 
 // Allocate request and response MsgBuffers
-void alloc_req_resp_msg_buffers(AppContext *c) {
-  for (size_t msgbuf_idx = 0; msgbuf_idx < FLAGS_req_window; msgbuf_idx++) {
+void alloc_req_resp_msg_buffers(AppContext *c, size_t req_window) {
+  for (size_t msgbuf_idx = 0; msgbuf_idx < req_window; msgbuf_idx++) {
     c->client.window_[msgbuf_idx].req_msgbuf_ =
         c->rpc_->alloc_msg_buffer_or_die(sizeof(wire_req_t));
 

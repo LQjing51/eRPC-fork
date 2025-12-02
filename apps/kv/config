@@ -5,6 +5,7 @@
 --num_client_threads 16
 --req_window 8192
 --num_keys 1500
+--scan_size 128
 --get_req_percent 100
 --scan_req_percent 100
 --skewed 0
