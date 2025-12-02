@@ -109,6 +109,8 @@ void send_req(AppContext *c, size_t msgbuf_idx) {
 
   // Generate a random request
   wire_req_t req;
+  uint32_t rand_key_tmp = c->fastrand_.next_u32() % FLAGS_num_keys;
+  uint32_t rand_key = FLAGS_skewed ? (rand_key_tmp < FLAGS_num_keys - 1 ? 0 : c->fastrand_.next_u32() % FLAGS_num_keys) : rand_key_tmp;
   uint32_t rand_num = c->fastrand_.next_u32() % 100;
   if (rand_num < FLAGS_get_req_percent) {
     if (c->fastrand_.next_u32() % 100 < FLAGS_get_fg_percent) {
@@ -123,7 +125,7 @@ void send_req(AppContext *c, size_t msgbuf_idx) {
     */
     memset(&(req.get_req.key.key_), 0, KV::kKeySize);
     uint32_t *key_32 = reinterpret_cast<uint32_t *>(req.get_req.key.key_);
-    *key_32 = c->fastrand_.next_u32() % FLAGS_num_keys;
+    *key_32 = rand_key;
 
   } else if (rand_num < FLAGS_scan_req_percent) {
     req.req_type = kAppScanType;
@@ -134,7 +136,7 @@ void send_req(AppContext *c, size_t msgbuf_idx) {
     */
     memset(&(req.get_req.key.key_), 0, KV::kKeySize);
     uint32_t *key_32 = reinterpret_cast<uint32_t *>(req.get_req.key.key_);
-    *key_32 = c->fastrand_.next_u32() % FLAGS_num_keys;
+    *key_32 = rand_key;
 
   } else {
     if (c->fastrand_.next_u32() % 100 < FLAGS_put_fg_percent) {
@@ -150,7 +152,7 @@ void send_req(AppContext *c, size_t msgbuf_idx) {
     */
     memset(&(req.put_req.key.key_), 0, KV::kKeySize);
     uint32_t *key_32 = reinterpret_cast<uint32_t *>(req.put_req.key.key_);
-    *key_32 = c->fastrand_.next_u32() % FLAGS_num_keys;
+    *key_32 = rand_key;
     
     /*ensure the value size is larger or equal to 8 Bytes.*/
     memset(&(req.put_req.value.value_), 0, KV::kValueSize);
@@ -207,6 +209,7 @@ void app_cont_func(void *_context, void *_msgbuf_idx) {
                 *key, *recvd_value, true_value);
       }
     }
+    c->client.num_resps_get++;
   } else if (req->req_type == kAppScanType) {
     // Store latency sample in vector
     c->client.scan_lat_vec.push_back(usec);
@@ -224,11 +227,13 @@ void app_cont_func(void *_context, void *_msgbuf_idx) {
         fprintf(stderr, "KV Scan Value mismatch. Req key = %u, recvd_value = %lu, true_value = %lu\n", key_value, *recvd_value, scan_value);
       }
     }
+    c->client.num_resps_scan++;
   } else {
     // This should be a put request (kAppPutFgType or kAppPutBgType)
     // Store latency sample in vector
     c->client.put_lat_vec.push_back(usec);
     // Qijing TODO: add success check?
+    c->client.num_resps_put++;
   }
 
   c->client.num_resps_tot++;
@@ -262,13 +267,16 @@ void client_print_stats(AppContext &c) {
     scan_lat_99 = c.client.scan_lat_vec.at(c.client.scan_lat_vec.size() * 0.99);
   }
   printf(
-      "Client %zu. Tput = %.3f Mrps. "
+      "Client %zu. Tput = (%.3f, %.3f, %.3f) Mrps. "
       "Get-query latency (us) = {%.1f 50th, %.1f 90th, %.1f 99th}. "
       "Put-query latency (us) = {%.1f 50th, %.1f 90th, %.1f 99th}. "
       "Scan-query latency (us) = {%.1f 50th, %.1f 90th, %.1f 99th}.\n",
-      c.thread_id_, tput_mrps, get_lat_50, get_lat_90, get_lat_99, put_lat_50, put_lat_90, put_lat_99, scan_lat_50, scan_lat_90, scan_lat_99);
+      c.thread_id_, c.client.num_resps_get / (seconds * 1000000), c.client.num_resps_put / (seconds * 1000000), c.client.num_resps_scan / (seconds * 1000000), get_lat_50, get_lat_90, get_lat_99, put_lat_50, put_lat_90, put_lat_99, scan_lat_50, scan_lat_90, scan_lat_99);
 
   c.client.num_resps_tot = 0;
+  c.client.num_resps_get = 0;
+  c.client.num_resps_put = 0;
+  c.client.num_resps_scan = 0;
   c.client.get_lat_vec.clear();
   c.client.put_lat_vec.clear();
   c.client.scan_lat_vec.clear();
@@ -316,7 +324,27 @@ void client_thread_func(size_t thread_id, app_stats_t *app_stats,
 
   for (size_t i = 0; i < FLAGS_test_ms; i += kAppEvLoopMs) {
     c.rpc_->run_event_loop(kAppEvLoopMs);
-    if (ctrl_c_pressed == 1) break;
+    if (ctrl_c_pressed == 1) {
+      if (erpc::HOSTCC && !erpc::client) {
+        RhyR::hostcc_exit();
+      }
+      break;
+    }
+    // print log
+    if (erpc::HOSTCC && erpc::client){
+      printf("Thread %zu:", c.thread_id_);
+      RhyR::hostcc_print_stats();
+    }
+    if (erpc::SWIFT && erpc::client){
+      printf("Thread %zu:", c.thread_id_);
+      RhyR::swift_print_stats();
+    }
+    if (erpc::queue_size) {
+      printf("Thread %zu: avg_poll_num %.2f\n", c.thread_id_, c.rpc_->avg_poll_num);
+      c.rpc_->stats_count = 0;
+      c.rpc_->avg_poll_num = 0;
+    }
+
     client_print_stats(c);
   }
 }

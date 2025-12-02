@@ -20,7 +20,7 @@ static constexpr size_t kAppPutBgType = 4;
 static constexpr size_t kAppScanType = 5;
 static constexpr size_t kAppEvLoopMs = 500;
 
-static constexpr size_t kAppMaxReqWindow = 1024;  // Max pending reqs per client
+static constexpr size_t kAppMaxReqWindow = 8192;  // Max pending reqs per client
 
 // Globals
 volatile sig_atomic_t ctrl_c_pressed = 0;
@@ -34,6 +34,7 @@ DEFINE_uint64(req_window, 0, "Outstanding requests per client thread");
 DEFINE_uint64(num_keys, 0, "Number of keys in the server's Hashmap");
 DEFINE_uint64(get_req_percent, 0, "Percentage of get");
 DEFINE_uint64(scan_req_percent, 0, "Percentage of scan");//should be larger than get_req_percent, 0-get_req_percent: get; get_req_percent-scan_req_percent: scan; scan_req_percent-100: put
+DEFINE_uint64(skewed, 0, "Skewed request distribution");//0: uniform; 1: skewed
 DEFINE_uint64(get_fg_percent, 0, "Percentage of get requests allocated to fg threads");
 DEFINE_uint64(put_fg_percent, 0, "Percentage of put requests allocated to fg threads");
 
@@ -272,6 +273,9 @@ class AppContext : public BasicAppContext {
 
     erpc::FastRand fast_rand;
     size_t num_resps_tot = 0;  // Total responses received (range & point reqs)
+    size_t num_resps_get = 0;  // Total responses received for get
+    size_t num_resps_put = 0;  // Total responses received for put
+    size_t num_resps_scan = 0;  // Total responses received for scan
   } client;
 };
 

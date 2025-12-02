@@ -81,7 +81,7 @@ size_t IBTransport::tx_burst(const tx_burst_item_t* tx_burst_arr, size_t tail, s
       ret = ibv_post_send(qp, &send_wr[0], &bad_wr);
     }
   } else {
-    if (SWIFT){
+    if (SWIFT || SWIFT_SERVER){
       ret = RhyR::swift_server_post_send(qp, &send_wr[0], &bad_wr);
     } else if (HOSTCC){
       ret = RhyR::hostcc_server_post_send(qp, &send_wr[0], &bad_wr);
@@ -161,7 +161,7 @@ size_t IBTransport::rx_burst() {
       ret = ibv_poll_cq(recv_cq, kPostlist, recv_wc);
     }
   } else {
-    if (SWIFT){
+    if (SWIFT || SWIFT_SERVER){
       ret = RhyR::swift_server_poll_recv_cq(recv_cq, max_poll, recv_wc);
     } else if (CARC){
       ret = RhyR::RhyR_server_poll_recv_cq(recv_cq, max_poll, recv_wc);
